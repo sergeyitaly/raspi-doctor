@@ -1,34 +1,43 @@
 #!/bin/bash
 
 # Directories
-BASE_DIR="/opt/pi-health-ai"
+BASE_DIR="/home/pi/raspi-doctor"
 LOG_DIR="/var/log/ai_health"
-SYSTEMD_DIR="$BASE_DIR/systemd"
+SYSTEMD_DIR="$BASE_DIR"
 
-echo "Step 1: Create directories and set ownership..."
-sudo mkdir -p "$BASE_DIR" "$LOG_DIR"
-sudo chown -R $USER:$USER "$BASE_DIR" "$LOG_DIR"
+echo "Step 1: Create log directory and set ownership..."
+sudo mkdir -p "$LOG_DIR"
+sudo chown -R "$USER:$USER" "$LOG_DIR"
 
 echo "Step 2: Copy scripts to /usr/local/bin and set permissions..."
-cp "$BASE_DIR/collect_health.py" /usr/local/bin/collect_health.py
-sudo chmod +x /usr/local/bin/collect_health.py
+for script in collect_health.py raspi_doctor.sh netcheck.sh secscan.sh; do
+    if [ -f "$BASE_DIR/$script" ]; then
+        sudo cp "$BASE_DIR/$script" /usr/local/bin/
+        sudo chmod +x "/usr/local/bin/$script"
+        echo "Installed $script"
+    else
+        echo "WARNING: $script not found in $BASE_DIR"
+    fi
+done
 
-sudo chmod +x /usr/local/bin/raspi_doctor.sh
-sudo chmod +x /usr/local/bin/netcheck.sh
-sudo chmod +x /usr/local/bin/secscan.sh
-
-# Also make collector.py executable if present
+# Make collector.py executable if present
 if [ -f "$BASE_DIR/collector.py" ]; then
     chmod +x "$BASE_DIR/collector.py"
     echo "Made collector.py executable"
 fi
 
 echo "Step 3: Setup Python virtual environment and install requirements..."
-cd "$BASE_DIR" || exit 1
-python3 -m venv .venv
+cd "$BASE_DIR" || { echo "ERROR: Could not cd to $BASE_DIR"; exit 1; }
+if [ ! -d ".venv" ]; then
+    python3 -m venv .venv
+fi
 source .venv/bin/activate
 pip install --upgrade pip
-pip install -r requirements.txt
+if [ -f "requirements.txt" ]; then
+    pip install -r requirements.txt
+else
+    echo "WARNING: requirements.txt not found"
+fi
 deactivate
 
 echo "Step 4: Copy systemd unit files to /etc/systemd/system/..."

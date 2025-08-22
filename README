@@ -1,14 +1,18 @@
 install ollama:
 
-wget https://github.com/ollama/ollama/releases/download/v0.11.6/ollama-linux-arm64.tgz
-sudo tar -xzf ollama-linux-arm64.tar.gz -C /usr/local/bin/
+wget https://github.com/ollama/ollama/releases/download/v0.11.6/ollama-linux-arm64.tgz -O ollama-linux-arm64.tgz
+# Extract it
+tar -xvzf ollama-linux-arm64.tgz
 
-    or ...
+# This should create an 'ollama' binary in the current folder
+ls -l
 
-curl -fsSL https://ollama.com/install.sh -o install.sh
-chmod +x install.sh
-./install.sh
+# Move binary to /usr/local/bin and make executable
+sudo mv ollama /usr/local/bin/
+sudo chmod +x /usr/local/bin/ollama
 
+# Test
+ollama --version
 
 Pull a lightweight model (fits in 4GB RAM):
 
