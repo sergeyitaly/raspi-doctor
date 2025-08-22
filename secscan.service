@@ -1,0 +1,6 @@
+[Unit]
+Description=Security Log Collector
+
+[Service]
+Type=oneshot
+ExecStart=/usr/local/bin/secscan.sh

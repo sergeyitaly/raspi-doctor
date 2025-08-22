@@ -1,0 +1,6 @@
+[Unit]
+Description=Raspberry Pi Health Check Collector & Auto-Healer
+
+[Service]
+Type=oneshot
+ExecStart=/usr/local/bin/raspi_doctor.sh

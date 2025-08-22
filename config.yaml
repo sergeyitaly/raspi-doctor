@@ -1,0 +1,11 @@
+# /etc/pi-doctor/config.yaml
+thresholds:
+  cpu_temp: 80
+  memory_usage: 85
+  disk_usage: 90
+  load_15min: 4.0
+
+actions:
+  auto_block_ips: true
+  auto_restart_services: true
+  auto_optimize_network: true

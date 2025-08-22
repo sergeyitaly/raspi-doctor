@@ -1,0 +1,25 @@
+install ollama:
+
+wget https://github.com/ollama/ollama/releases/download/v0.11.6/ollama-linux-arm64.tgz
+sudo tar -xzf ollama-linux-arm64.tar.gz -C /usr/local/bin/
+
+    or ...
+
+curl -fsSL https://ollama.com/install.sh -o install.sh
+chmod +x install.sh
+./install.sh
+
+
+Pull a lightweight model (fits in 4GB RAM):
+
+ollama pull tinyllama
+ollama pull phi
+ollama run tinyllama
+
+sudo apt install smartmontools
+sudo smartctl -a /dev/mmcblk0
+
+
+chmod +x /opt/pi-health-ai/setup_pi_doctor.sh
+sudo /opt/pi-health-ai/setup_pi_doctor.sh
+sudo systemctl status collect_health.timer raspi_doctor.timer netcheck.timer secscan.timer

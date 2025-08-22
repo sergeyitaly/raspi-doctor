@@ -1,0 +1,10 @@
+[Unit]
+Description=Run Network Check every 5 minutes
+
+[Timer]
+OnBootSec=2min
+OnUnitActiveSec=5min
+Unit=netcheck.service
+
+[Install]
+WantedBy=timers.target

@@ -1,0 +1,6 @@
+[Unit]
+Description=Network Connectivity Check
+
+[Service]
+Type=oneshot
+ExecStart=/usr/local/bin/netcheck.sh

@@ -1,0 +1,9 @@
+[Unit]
+Description=Raspberry Pi AI Doctor Supervisor
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+User=root
+ExecStart=/opt/pi-health-ai/.venv/bin/python /opt/pi-health-ai/enhanced_doctor.py

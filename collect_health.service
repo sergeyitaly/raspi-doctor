@@ -1,0 +1,6 @@
+[Unit]
+Description=Collect Raspberry Pi Health Data
+
+[Service]
+Type=oneshot
+ExecStart=/usr/local/bin/collect_health.py

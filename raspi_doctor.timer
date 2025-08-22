@@ -1,0 +1,10 @@
+[Unit]
+Description=Run Raspberry Pi Health Collector & Auto-Healer every 5 minutes
+
+[Timer]
+OnBootSec=2min
+OnUnitActiveSec=5min
+Unit=raspi_doctor.service
+
+[Install]
+WantedBy=timers.target
