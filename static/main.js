@@ -56,7 +56,57 @@ document.addEventListener('DOMContentLoaded', function() {
     // Initialize Ollama status check
     checkOllamaStatus();
     setInterval(checkOllamaStatus, 30000);
+    
+    // Setup Ollama test functionality
+    setupOllamaTest();
 });
+
+function setupOllamaTest() {
+    const testPromptBtn = document.getElementById('test-ollama-prompt');
+    const clearTestBtn = document.getElementById('clear-ollama-test');
+    const testInput = document.getElementById('ollama-test-input');
+    const testOutput = document.getElementById('ollama-test-output');
+    
+    if (testPromptBtn) {
+        testPromptBtn.addEventListener('click', async function() {
+            const prompt = testInput.value.trim();
+            if (!prompt) return;
+            
+            testPromptBtn.disabled = true;
+            testPromptBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Testing...';
+            testOutput.textContent = 'Sending prompt to Ollama...';
+            
+            try {
+                const response = await fetch('/api/test-ollama', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({ prompt: prompt })
+                });
+                
+                const data = await response.json();
+                if (data.success) {
+                    testOutput.textContent = data.response;
+                } else {
+                    testOutput.textContent = 'Error: ' + data.error;
+                }
+            } catch (error) {
+                testOutput.textContent = 'Connection error: ' + error.message;
+            } finally {
+                testPromptBtn.disabled = false;
+                testPromptBtn.innerHTML = '<i class="fas fa-paper-plane"></i> Send Prompt';
+            }
+        });
+    }
+    
+    if (clearTestBtn) {
+        clearTestBtn.addEventListener('click', function() {
+            testInput.value = '';
+            testOutput.textContent = 'Response will appear here...';
+        });
+    }
+}
 
 function setupEventListeners() {
     const testOllamaBtn = document.getElementById('test-ollama');

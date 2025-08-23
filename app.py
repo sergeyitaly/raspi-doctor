@@ -396,6 +396,32 @@ def api_ollama_status():
     except Exception as e:
         return jsonify({"status": "offline", "message": str(e)})
 
+@app.route('/api/test-ollama', methods=['POST'])
+def test_ollama():
+    try:
+        data = request.get_json()
+        prompt = data.get('prompt', 'Hello')
+        
+        # Simple test request to Ollama
+        response = requests.post(
+            'http://localhost:11434/api/generate',
+            json={
+                'model': 'phi3:mini',
+                'prompt': prompt,
+                'stream': False
+            },
+            timeout=30
+        )
+        
+        if response.status_code == 200:
+            result = response.json()
+            return jsonify({'success': True, 'response': result.get('response', 'No response')})
+        else:
+            return jsonify({'success': False, 'error': f'Ollama error: {response.status_code}'})
+            
+    except Exception as e:
+        return jsonify({'success': False, 'error': str(e)})
+
 @app.route("/api/temperature")
 def api_temperature():
     """Get CPU temperature with multiple fallback methods"""

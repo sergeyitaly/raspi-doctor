@@ -4,11 +4,57 @@ import requests
 import textwrap
 import json
 import sqlite3
+import time
 from datetime import datetime, timedelta
 
 OLLAMA_HOST = os.getenv("OLLAMA_HOST", "http://127.0.0.1:11434")
 MODEL = os.getenv("OLLAMA_MODEL", "phi3:mini")
 KNOWLEDGE_DB = "/var/log/ai_health/knowledge.db"
+OLLAMA_TIMEOUT = int(os.getenv("OLLAMA_TIMEOUT", "120"))  # Default 120 seconds
+
+def check_ollama_health():
+    """Check if Ollama server is healthy"""
+    try:
+        response = requests.get(f"{OLLAMA_HOST}/api/tags", timeout=10)
+        return response.status_code == 200
+    except (requests.ConnectionError, requests.Timeout):
+        return False
+
+def wait_for_ollama(max_wait=60):
+    """Wait for Ollama to become available"""
+    start_time = time.time()
+    while time.time() - start_time < max_wait:
+        if check_ollama_health():
+            return True
+        print("Waiting for Ollama server...")
+        time.sleep(5)
+    return False
+
+def safe_ollama_request(url, payload, timeout=OLLAMA_TIMEOUT, max_retries=2):
+    """Make a safe request to Ollama with retries"""
+    for attempt in range(max_retries + 1):
+        try:
+            response = requests.post(url, json=payload, timeout=timeout)
+            response.raise_for_status()
+            return response.json()
+        except requests.exceptions.ConnectionError:
+            if attempt == max_retries:
+                raise
+            print(f"Connection error, retrying in 5 seconds... (attempt {attempt + 1}/{max_retries + 1})")
+            time.sleep(5)
+        except requests.exceptions.Timeout:
+            if attempt == max_retries:
+                raise
+            print(f"Timeout, retrying in 5 seconds... (attempt {attempt + 1}/{max_retries + 1})")
+            time.sleep(5)
+        except requests.exceptions.RequestException as e:
+            if attempt == max_retries:
+                raise
+            print(f"Request error: {e}, retrying in 5 seconds... (attempt {attempt + 1}/{max_retries + 1})")
+            time.sleep(5)
+    
+    # Should never reach here
+    raise requests.exceptions.RequestException("All retries failed")
 
 def get_system_patterns_from_db(hours=72):
     """Retrieve system patterns from the knowledge database"""
@@ -29,7 +75,6 @@ def get_system_patterns_from_db(hours=72):
         for row in cursor.fetchall():
             pattern_type, pattern_data_blob, severity, confidence, solution, count = row
             try:
-                # For now, just store the raw data since we can't unpickle here
                 patterns.append({
                     'type': pattern_type,
                     'data_size': len(pattern_data_blob) if pattern_data_blob else 0,
@@ -113,7 +158,6 @@ def get_metric_trends(metric_names=None, hours=72):
                     'data_points': len(values)
                 }
             elif results:
-                # Only one data point
                 trends[metric] = {
                     'current': results[0][0],
                     'average': results[0][0],
@@ -131,6 +175,11 @@ def get_metric_trends(metric_names=None, hours=72):
 
 def summarize_text(text: str, prompt: str = None, max_chars=6000):
     """Enhanced summarization with historical context from knowledge base"""
+    
+    # Check if Ollama is available first
+    if not check_ollama_health():
+        if not wait_for_ollama():
+            return "AI analysis unavailable: Ollama server is not responding"
     
     # Get historical context from knowledge base
     patterns = get_system_patterns_from_db()
@@ -196,15 +245,17 @@ def summarize_text(text: str, prompt: str = None, max_chars=6000):
                 "num_predict": 500
             }
         }
-        response = requests.post(url, json=payload, timeout=60)
-        response.raise_for_status()
-        data = response.json()
+        data = safe_ollama_request(url, payload, timeout=120)
         return data.get("response", "").strip()
     except Exception as e:
         return f"Error consulting AI: {str(e)}"
 
 def analyze_network_logs(log_content: str, max_chars=2000):
     """Fast network analysis with reduced context"""
+    # Check if Ollama is available first
+    if not check_ollama_health():
+        return "Network analysis unavailable: Ollama server is not responding"
+    
     log_content = log_content[-max_chars:] if len(log_content) > max_chars else log_content
     
     prompt = textwrap.dedent("""
@@ -225,18 +276,20 @@ def analyze_network_logs(log_content: str, max_chars=2000):
             "stream": False,
             "options": {
                 "temperature": 0.1,
-                "num_predict": 300  # Very short response
+                "num_predict": 300
             }
         }
-        response = requests.post(url, json=payload, timeout=30)
-        response.raise_for_status()
-        data = response.json()
+        data = safe_ollama_request(url, payload, timeout=60)
         return data.get("response", "").strip()
     except Exception as e:
         return f"Network analysis unavailable: {str(e)}"
 
 def analyze_security_logs(log_content: str, max_chars=2000):
     """Fast security analysis with reduced context"""
+    # Check if Ollama is available first
+    if not check_ollama_health():
+        return "Security analysis unavailable: Ollama server is not responding"
+    
     log_content = log_content[-max_chars:] if len(log_content) > max_chars else log_content
     
     prompt = textwrap.dedent("""
@@ -260,16 +313,22 @@ def analyze_security_logs(log_content: str, max_chars=2000):
                 "num_predict": 300
             }
         }
-        response = requests.post(url, json=payload, timeout=30)
-        response.raise_for_status()
-        data = response.json()
+        data = safe_ollama_request(url, payload, timeout=60)
         return data.get("response", "").strip()
     except Exception as e:
         return f"Security analysis unavailable: {str(e)}"
-    
 
 def consult_ai_for_service_issue(service_name: str, logs: str, service_status: str):
     """Consult AI for service troubleshooting with historical context"""
+    
+    # Check if Ollama is available first
+    if not check_ollama_health():
+        return {
+            "solution": "investigate",
+            "reason": "Ollama server is not available for AI consultation",
+            "confidence": "low",
+            "recommended_command": f"journalctl -u {service_name} --no-pager -n 50"
+        }
     
     # Get historical patterns for this service type
     service_patterns = []
@@ -286,7 +345,6 @@ def consult_ai_for_service_issue(service_name: str, logs: str, service_status: s
         
         for row in cursor.fetchall():
             pattern_data_blob, solution, success_rate, count = row
-            # Store basic info since we can't unpickle
             service_patterns.append({
                 'solution': solution,
                 'success_rate': success_rate,
@@ -322,20 +380,16 @@ def consult_ai_for_service_issue(service_name: str, logs: str, service_status: s
             "stream": False,
             "options": {"temperature": 0.1}
         }
-        response = requests.post(url, json=payload, timeout=120)
-        response.raise_for_status()
-        data = response.json()
+        data = safe_ollama_request(url, payload, timeout=120)
         response_text = data.get("response", "").strip()
         
         # Try to extract JSON from response
         try:
-            # Look for JSON in the response
             import re
             json_match = re.search(r'\{.*\}', response_text, re.DOTALL)
             if json_match:
                 return json.loads(json_match.group())
             else:
-                # Fallback if no JSON found
                 return {
                     "solution": "investigate",
                     "reason": "Could not parse AI response as JSON",
@@ -361,7 +415,11 @@ def consult_ai_for_service_issue(service_name: str, logs: str, service_status: s
 def analyze_system_trends():
     """Generate comprehensive trend analysis using historical data"""
     
-    trends = get_metric_trends(hours=168)  # 1 week of data
+    # Check if Ollama is available first
+    if not check_ollama_health():
+        return "Trend analysis unavailable: Ollama server is not responding"
+    
+    trends = get_metric_trends(hours=168)
     patterns = get_system_patterns_from_db(hours=168)
     outcomes = get_recent_action_outcomes(hours=168)
     
@@ -403,9 +461,7 @@ def analyze_system_trends():
             "stream": False,
             "options": {"temperature": 0.2}
         }
-        response = requests.post(url, json=payload, timeout=240)
-        response.raise_for_status()
-        data = response.json()
+        data = safe_ollama_request(url, payload, timeout=240)
         return data.get("response", "").strip()
     except Exception as e:
         return f"Trend analysis failed: {str(e)}"
@@ -415,8 +471,7 @@ def test_connection():
     """Test connection to Ollama and database"""
     try:
         # Test Ollama connection
-        response = requests.get(f"{OLLAMA_HOST}/api/tags", timeout=10)
-        ollama_ok = response.status_code == 200
+        ollama_ok = check_ollama_health()
         
         # Test database connection
         conn = sqlite3.connect(KNOWLEDGE_DB)
@@ -438,3 +493,20 @@ def test_connection():
             'database_connected': False,
             'error': str(e)
         }
+
+# Fallback functions for when Ollama is unavailable
+def fallback_network_analysis(log_content):
+    """Fallback network analysis without AI"""
+    lines = log_content.split('\n')
+    error_count = sum(1 for line in lines if 'error' in line.lower() or 'fail' in line.lower())
+    connection_count = sum(1 for line in lines if 'connect' in line.lower())
+    
+    return f"Basic network analysis (AI unavailable): {len(lines)} log lines, {error_count} errors, {connection_count} connection events"
+
+def fallback_security_analysis(log_content):
+    """Fallback security analysis without AI"""
+    lines = log_content.split('\n')
+    failed_logins = sum(1 for line in lines if 'fail' in line.lower() and 'login' in line.lower())
+    invalid_users = sum(1 for line in lines if 'invalid' in line.lower() and 'user' in line.lower())
+    
+    return f"Basic security scan (AI unavailable): {len(lines)} log lines, {failed_logins} failed logins, {invalid_users} invalid user attempts"
