@@ -41,11 +41,12 @@ class SystemMonitor:
             net_io = psutil.net_io_counters()
             
             # Temperature (Raspberry Pi specific)
+            cpu_temp = 0.0
             try:
                 temp_output = subprocess.check_output(["vcgencmd", "measure_temp"], text=True)
                 cpu_temp = float(temp_output.split("=")[1].split("'")[0])
-            except:
-                cpu_temp = 0.0
+            except Exception:
+                pass
             
             # Uptime
             uptime_seconds = time.time() - psutil.boot_time()
@@ -116,9 +117,9 @@ class SystemMonitor:
                 "ping -c 3 8.8.8.8 | tail -1 | awk '{print $4}' | cut -d'/' -f2",
                 shell=True, capture_output=True, text=True, timeout=10
             )
-            if result.returncode == 0:
+            if result.returncode == 0 and result.stdout.strip():
                 return float(result.stdout.strip())
-        except:
+        except Exception:
             pass
         return 0.0
     
@@ -129,47 +130,52 @@ class SystemMonitor:
                 "ping -c 10 8.8.8.8 | grep 'packet loss' | awk '{print $6}' | tr -d '%'",
                 shell=True, capture_output=True, text=True, timeout=15
             )
-            if result.returncode == 0:
+            if result.returncode == 0 and result.stdout.strip():
                 return float(result.stdout.strip())
-        except:
+        except Exception:
             pass
         return 0.0
     
     def update_status(self):
         """Update system status based on current metrics"""
-        # Check CPU temperature
-        if self.health_data['cpu']['temperature'] > 75:
-            self.health_data['status']['overall'] = 'warning'
-        elif self.health_data['cpu']['temperature'] > 85:
+        # CPU temp
+        temp = self.health_data['cpu']['temperature']
+        if temp > 85:
             self.health_data['status']['overall'] = 'critical'
-        
-        # Check memory usage
-        if self.health_data['memory']['percent'] > 85:
+        elif temp > 75:
             self.health_data['status']['overall'] = 'warning'
-        elif self.health_data['memory']['percent'] > 95:
-            self.health_data['status']['overall'] = 'critical'
         
-        # Check disk usage
-        if self.health_data['disk']['percent'] > 85:
+        # Memory
+        mem_use = self.health_data['memory']['percent']
+        if mem_use > 95:
+            self.health_data['status']['overall'] = 'critical'
+        elif mem_use > 85:
             self.health_data['status']['overall'] = 'warning'
-        elif self.health_data['disk']['percent'] > 95:
-            self.health_data['status']['overall'] = 'critical'
         
-        # Check network
-        if self.health_data['network']['packet_loss_percent'] > 5:
-            self.health_data['status']['network'] = 'unstable'
-        elif self.health_data['network']['packet_loss_percent'] > 20:
+        # Disk
+        disk_use = self.health_data['disk']['percent']
+        if disk_use > 95:
+            self.health_data['status']['overall'] = 'critical'
+        elif disk_use > 85:
+            self.health_data['status']['overall'] = 'warning'
+        
+        # Network
+        packet_loss = self.health_data['network']['packet_loss_percent']
+        if packet_loss > 20:
             self.health_data['status']['network'] = 'poor'
+        elif packet_loss > 5:
+            self.health_data['status']['network'] = 'unstable'
         
-        # Check security (simplified)
+        # Security
         try:
             failed_logins = subprocess.run(
                 "grep 'Failed password' /var/log/auth.log | wc -l",
                 shell=True, capture_output=True, text=True
             )
-            if failed_logins.returncode == 0 and int(failed_logins.stdout.strip()) > 10:
-                self.health_data['status']['security'] = 'warning'
-        except:
+            if failed_logins.returncode == 0 and failed_logins.stdout.strip().isdigit():
+                if int(failed_logins.stdout.strip()) > 10:
+                    self.health_data['status']['security'] = 'warning'
+        except Exception:
             pass
     
     def start_monitoring(self):
@@ -206,12 +212,12 @@ def api_health_history():
     try:
         if LOG_FILE.exists():
             with open(LOG_FILE, 'r') as f:
-                for line in f.readlines()[-100:]:  # Last 100 entries
-                    if line.strip():
+                for line in f.readlines()[-100:]:
+                    if line.strip() and "Health Data:" in line:
                         try:
                             data = json.loads(line.split("Health Data: ")[1])
                             history.append(data)
-                        except:
+                        except Exception:
                             continue
     except Exception as e:
         print(f"Error reading health history: {e}")
@@ -226,7 +232,7 @@ def api_actions():
         actions_file = LOG_DIR / "actions.log"
         if actions_file.exists():
             with open(actions_file, 'r') as f:
-                actions = f.readlines()[-20:]  # Last 20 actions
+                actions = f.readlines()[-20:]
     except Exception as e:
         print(f"Error reading actions: {e}")
     
@@ -243,30 +249,32 @@ def api_security():
     }
     
     try:
-        # Check failed logins
+        # Failed logins count
         result = subprocess.run(
             "grep 'Failed password' /var/log/auth.log | wc -l",
             shell=True, capture_output=True, text=True
         )
-        if result.returncode == 0:
+        if result.returncode == 0 and result.stdout.strip().isdigit():
             security_info["failed_logins"] = int(result.stdout.strip())
         
-        # Check suspicious IPs
+        # Top suspicious IPs
         result = subprocess.run(
             "grep 'Failed password' /var/log/auth.log | awk '{print $(NF-3)}' | sort | uniq -c | sort -nr | head -5",
             shell=True, capture_output=True, text=True
         )
         if result.returncode == 0:
             for line in result.stdout.splitlines():
-                if line.strip():
-                    count, ip = line.strip().split()[:2]
-                    security_info["suspicious_ips"].append({"ip": ip, "attempts": int(count)})
+                parts = line.strip().split()
+                if len(parts) >= 2:
+                    count, ip = parts[0], parts[1]
+                    if count.isdigit():
+                        security_info["suspicious_ips"].append({"ip": ip, "attempts": int(count)})
         
-        # Update status based on findings
-        if security_info["failed_logins"] > 50:
-            security_info["status"] = "warning"
-        elif security_info["failed_logins"] > 100:
+        # Status update
+        if security_info["failed_logins"] > 100:
             security_info["status"] = "critical"
+        elif security_info["failed_logins"] > 50:
+            security_info["status"] = "warning"
             
     except Exception as e:
         print(f"Error checking security: {e}")
@@ -278,8 +286,5 @@ def static_files(filename):
     return send_from_directory('static', filename)
 
 if __name__ == "__main__":
-    # Start the monitoring thread
-    monitor.start_monitoring()
-    
-    # Run the Flask app
+    # Only run Flask app (monitor already started)
     app.run(host="0.0.0.0", port=int(os.getenv("PORT", "8010")), debug=True)
