@@ -137,6 +137,23 @@ def api_hardware():
     path = LOG_DIR / "hardware.log"
     return jsonify({"report": path.read_text()[-5000:] if path.exists() else "No hardware logs."})
 
+@app.route('/debug/template')
+def debug_template():
+    template_path = Path('templates/index.html')
+    if not template_path.exists():
+        return "Template does not exist!", 404
+    
+    content = template_path.read_text()
+    # Check if the template has correct static references
+    has_correct_css = 'url_for(\'static\', filename=\'style.css\')' in content
+    has_correct_js = 'url_for(\'static\', filename=\'main.js\')' in content
+    
+    return jsonify({
+        'template_exists': True,
+        'has_correct_css_reference': has_correct_css,
+        'has_correct_js_reference': has_correct_js
+    })
+
 @app.route("/")
 def index():
     latest = read_tail(LOG_FILE, max_bytes=60000)
