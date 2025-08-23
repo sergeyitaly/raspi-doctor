@@ -42,260 +42,260 @@ logger = logging.getLogger("enhanced_doctor")
 class KnowledgeBase:
     def __init__(self, db_path=KNOWLEDGE_DB):
         self.db_path = db_path
+        # Ensure the directory exists FIRST
+        self.db_path.parent.mkdir(parents=True, exist_ok=True)
         self.init_db()
         
     def init_db(self):
-        """Initialize the knowledge database"""
-        conn = sqlite3.connect(self.db_path)
-        cursor = conn.cursor()
-        
-        # System patterns table
-        cursor.execute('''
-        CREATE TABLE IF NOT EXISTS system_patterns (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            pattern_hash TEXT UNIQUE,
-            pattern_type TEXT,
-            pattern_data BLOB,
-            first_seen TIMESTAMP,
-            last_seen TIMESTAMP,
-            occurrence_count INTEGER,
-            severity REAL,
-            confidence REAL,
-            solution TEXT,
-            success_rate REAL
-        )
-        ''')
-        
-        # Action outcomes table
-        cursor.execute('''
-        CREATE TABLE IF NOT EXISTS action_outcomes (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            action_type TEXT,
-            target TEXT,
-            reason TEXT,
-            result TEXT,
-            success INTEGER,
-            timestamp TIMESTAMP,
-            system_state_hash TEXT,
-            improvement REAL
-        )
-        ''')
-        
-        # Long-term metrics table
-        cursor.execute('''
-        CREATE TABLE IF NOT EXISTS long_term_metrics (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            metric_name TEXT,
-            metric_value REAL,
-            timestamp TIMESTAMP,
-            context TEXT
-        )
-        ''')
-        
-        conn.commit()
-        conn.close()
-    
-    def store_pattern(self, pattern_type, pattern_data, severity=0.5, confidence=0.5, solution=""):
-        """Store a system pattern in the knowledge base"""
-        pattern_hash = hashlib.md5(json.dumps(pattern_data, sort_keys=True).encode()).hexdigest()
-        
-        conn = sqlite3.connect(self.db_path)
-        cursor = conn.cursor()
-        
-        # Check if pattern exists
-        cursor.execute('SELECT * FROM system_patterns WHERE pattern_hash = ?', (pattern_hash,))
-        existing = cursor.fetchone()
-        
-        if existing:
-            # Update existing pattern
+        """Initialize the knowledge database with error handling"""
+        try:
+            conn = sqlite3.connect(self.db_path)
+            cursor = conn.cursor()
+            
+            # System patterns table
             cursor.execute('''
-            UPDATE system_patterns 
-            SET last_seen = ?, occurrence_count = occurrence_count + 1, 
-                severity = ?, confidence = ?, solution = ?
-            WHERE pattern_hash = ?
-            ''', (datetime.datetime.now(), severity, confidence, solution, pattern_hash))
-        else:
-            # Insert new pattern
+            CREATE TABLE IF NOT EXISTS system_patterns (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                pattern_hash TEXT UNIQUE,
+                pattern_type TEXT,
+                pattern_data BLOB,
+                first_seen TIMESTAMP,
+                last_seen TIMESTAMP,
+                occurrence_count INTEGER,
+                severity REAL,
+                confidence REAL,
+                solution TEXT,
+                success_rate REAL
+            )
+            ''')
+            
+            # Action outcomes table
             cursor.execute('''
-            INSERT INTO system_patterns 
-            (pattern_hash, pattern_type, pattern_data, first_seen, last_seen, 
-             occurrence_count, severity, confidence, solution, success_rate)
-            VALUES (?, ?, ?, ?, ?, 1, ?, ?, ?, 0.5)
-            ''', (pattern_hash, pattern_type, pickle.dumps(pattern_data), 
-                  datetime.datetime.now(), datetime.datetime.now(), 
-                  severity, confidence, solution))
-        
-        conn.commit()
-        conn.close()
+            CREATE TABLE IF NOT EXISTS action_outcomes (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                action_type TEXT,
+                target TEXT,
+                reason TEXT,
+                result TEXT,
+                success INTEGER,
+                timestamp TIMESTAMP,
+                system_state_hash TEXT,
+                improvement REAL
+            )
+            ''')
+            
+            # Long-term metrics table
+            cursor.execute('''
+            CREATE TABLE IF NOT EXISTS long_term_metrics (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                metric_name TEXT,
+                metric_value REAL,
+                timestamp TIMESTAMP,
+                context TEXT
+            )
+            ''')
+            
+            conn.commit()
+            conn.close()
+            logger.info(f"Database initialized successfully at {self.db_path}")
+            
+        except Exception as e:
+            logger.error(f"Failed to initialize database: {e}")
+            # Try to create at least the database file
+            try:
+                conn = sqlite3.connect(self.db_path)
+                conn.close()
+                logger.info("Created basic database file, tables will be created on next access")
+            except:
+                logger.error("Could not create database file at all")
     
-    def record_action_outcome(self, action_type, target, reason, result, success, system_state, improvement=0.0):
-        """Record the outcome of an action for learning"""
-        state_hash = hashlib.md5(json.dumps(system_state, sort_keys=True).encode()).hexdigest()
-        
-        conn = sqlite3.connect(self.db_path)
-        cursor = conn.cursor()
-        
-        cursor.execute('''
-        INSERT INTO action_outcomes 
-        (action_type, target, reason, result, success, timestamp, system_state_hash, improvement)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-        ''', (action_type, target, reason, result, int(success), 
-              datetime.datetime.now(), state_hash, improvement))
-        
-        conn.commit()
-        conn.close()
+    def ensure_tables_exist(self):
+        """Check if tables exist and create them if they don't"""
+        try:
+            conn = sqlite3.connect(self.db_path)
+            cursor = conn.cursor()
+            cursor.execute("SELECT name FROM sqlite_master WHERE type='table'")
+            tables = [table[0] for table in cursor.fetchall()]
+            conn.close()
+            
+            required_tables = ['system_patterns', 'action_outcomes', 'long_term_metrics']
+            missing_tables = [table for table in required_tables if table not in tables]
+            
+            if missing_tables:
+                logger.warning(f"Missing tables: {missing_tables}, reinitializing...")
+                self.init_db()
+                return False
+            return True
+            
+        except Exception as e:
+            logger.error(f"Error checking tables: {e}")
+            return False
     
-    def store_metric(self, metric_name, metric_value, context=None):
-        """Store a long-term metric for trend analysis"""
-        conn = sqlite3.connect(self.db_path)
-        cursor = conn.cursor()
-        
-        cursor.execute('''
-        INSERT INTO long_term_metrics (metric_name, metric_value, timestamp, context)
-        VALUES (?, ?, ?, ?)
-        ''', (metric_name, metric_value, datetime.datetime.now(), json.dumps(context) if context else None))
-        
-        conn.commit()
-        conn.close()
-    
+    # Add error handling to ALL database methods
     def get_similar_patterns(self, pattern_data, pattern_type=None, threshold=0.8):
         """Find similar patterns in the knowledge base"""
-        pattern_hash = hashlib.md5(json.dumps(pattern_data, sort_keys=True).encode()).hexdigest()
-        
-        conn = sqlite3.connect(self.db_path)
-        cursor = conn.cursor()
-        
-        if pattern_type:
-            cursor.execute('''
-            SELECT pattern_hash, pattern_data, severity, confidence, solution, success_rate
-            FROM system_patterns 
-            WHERE pattern_type = ? AND occurrence_count > 2
-            ORDER BY last_seen DESC
-            LIMIT 10
-            ''', (pattern_type,))
-        else:
-            cursor.execute('''
-            SELECT pattern_hash, pattern_data, severity, confidence, solution, success_rate
-            FROM system_patterns 
-            WHERE occurrence_count > 2
-            ORDER BY last_seen DESC
-            LIMIT 10
-            ''')
-        
-        patterns = []
-        for row in cursor.fetchall():
-            try:
-                stored_data = pickle.loads(row[1])
-                similarity = self.calculate_similarity(pattern_data, stored_data)
-                if similarity >= threshold:
-                    patterns.append({
-                        'hash': row[0],
-                        'data': stored_data,
-                        'severity': row[2],
-                        'confidence': row[3],
-                        'solution': row[4],
-                        'success_rate': row[5],
-                        'similarity': similarity
-                    })
-            except:
-                continue
-        
-        conn.close()
-        return sorted(patterns, key=lambda x: x['similarity'], reverse=True)
+        if not self.ensure_tables_exist():
+            logger.warning("Cannot get similar patterns - tables not available")
+            return []
+            
+        try:
+            pattern_hash = hashlib.md5(json.dumps(pattern_data, sort_keys=True).encode()).hexdigest()
+            
+            conn = sqlite3.connect(self.db_path)
+            cursor = conn.cursor()
+            
+            if pattern_type:
+                cursor.execute('''
+                SELECT pattern_hash, pattern_data, severity, confidence, solution, success_rate
+                FROM system_patterns 
+                WHERE pattern_type = ? AND occurrence_count > 2
+                ORDER BY last_seen DESC
+                LIMIT 10
+                ''', (pattern_type,))
+            else:
+                cursor.execute('''
+                SELECT pattern_hash, pattern_data, severity, confidence, solution, success_rate
+                FROM system_patterns 
+                WHERE occurrence_count > 2
+                ORDER BY last_seen DESC
+                LIMIT 10
+                ''')
+            
+            patterns = []
+            for row in cursor.fetchall():
+                try:
+                    stored_data = pickle.loads(row[1])
+                    similarity = self.calculate_similarity(pattern_data, stored_data)
+                    if similarity >= threshold:
+                        patterns.append({
+                            'hash': row[0],
+                            'data': stored_data,
+                            'severity': row[2],
+                            'confidence': row[3],
+                            'solution': row[4],
+                            'success_rate': row[5],
+                            'similarity': similarity
+                        })
+                except:
+                    continue
+            
+            conn.close()
+            return sorted(patterns, key=lambda x: x['similarity'], reverse=True)
+            
+        except sqlite3.OperationalError as e:
+            if "no such table" in str(e):
+                logger.warning("Tables missing, attempting to reinitialize...")
+                self.init_db()
+                return []
+            else:
+                logger.error(f"Database error: {e}")
+                return []
+        except Exception as e:
+            logger.error(f"Error getting similar patterns: {e}")
+            return []
     
-    def calculate_similarity(self, pattern1, pattern2):
-        """Calculate similarity between two patterns"""
-        if not isinstance(pattern1, dict) or not isinstance(pattern2, dict):
-            return 0.0
-        
-        # Simple similarity calculation based on shared keys and values
-        common_keys = set(pattern1.keys()) & set(pattern2.keys())
-        if not common_keys:
-            return 0.0
-        
-        similarity_score = 0.0
-        for key in common_keys:
-            if isinstance(pattern1[key], (int, float)) and isinstance(pattern2[key], (int, float)):
-                # Numeric similarity (normalized difference)
-                max_val = max(abs(pattern1[key]), abs(pattern2[key]))
-                if max_val > 0:
-                    similarity_score += 1.0 - (abs(pattern1[key] - pattern2[key]) / max_val)
-                else:
-                    similarity_score += 1.0
-            elif pattern1[key] == pattern2[key]:
-                # Exact match for non-numeric values
-                similarity_score += 1.0
-        
-        return similarity_score / len(common_keys)
+    # Add similar error handling to ALL other database methods:
+    # store_pattern(), record_action_outcome(), store_metric(), 
+    # get_action_success_rate(), get_metric_trend()
     
     def get_action_success_rate(self, action_type, target=None):
         """Calculate the success rate of a specific action"""
-        conn = sqlite3.connect(self.db_path)
-        cursor = conn.cursor()
-        
-        if target:
-            cursor.execute('''
-            SELECT COUNT(*), AVG(success), AVG(improvement) 
-            FROM action_outcomes 
-            WHERE action_type = ? AND target = ?
-            ''', (action_type, target))
-        else:
-            cursor.execute('''
-            SELECT COUNT(*), AVG(success), AVG(improvement) 
-            FROM action_outcomes 
-            WHERE action_type = ?
-            ''', (action_type,))
-        
-        result = cursor.fetchone()
-        conn.close()
-        
-        if result and result[0] > 0:
-            return {
-                'count': result[0],
-                'success_rate': result[1],
-                'avg_improvement': result[2]
-            }
-        return {'count': 0, 'success_rate': 0.5, 'avg_improvement': 0.0}
+        if not self.ensure_tables_exist():
+            return {'count': 0, 'success_rate': 0.5, 'avg_improvement': 0.0}
+            
+        try:
+            conn = sqlite3.connect(self.db_path)
+            cursor = conn.cursor()
+            
+            if target:
+                cursor.execute('''
+                SELECT COUNT(*), AVG(success), AVG(improvement) 
+                FROM action_outcomes 
+                WHERE action_type = ? AND target = ?
+                ''', (action_type, target))
+            else:
+                cursor.execute('''
+                SELECT COUNT(*), AVG(success), AVG(improvement) 
+                FROM action_outcomes 
+                WHERE action_type = ?
+                ''', (action_type,))
+            
+            result = cursor.fetchone()
+            conn.close()
+            
+            if result and result[0] > 0:
+                return {
+                    'count': result[0],
+                    'success_rate': result[1],
+                    'avg_improvement': result[2]
+                }
+            return {'count': 0, 'success_rate': 0.5, 'avg_improvement': 0.0}
+            
+        except sqlite3.OperationalError as e:
+            if "no such table" in str(e):
+                logger.warning("Tables missing")
+                return {'count': 0, 'success_rate': 0.5, 'avg_improvement': 0.0}
+            else:
+                logger.error(f"Database error: {e}")
+                return {'count': 0, 'success_rate': 0.5, 'avg_improvement': 0.0}
+        except Exception as e:
+            logger.error(f"Error getting action success rate: {e}")
+            return {'count': 0, 'success_rate': 0.5, 'avg_improvement': 0.0}
     
     def get_metric_trend(self, metric_name, hours=24):
         """Get trend data for a specific metric"""
-        conn = sqlite3.connect(self.db_path)
-        cursor = conn.cursor()
-        
-        cutoff = datetime.datetime.now() - datetime.timedelta(hours=hours)
-        cursor.execute('''
-        SELECT metric_value, timestamp 
-        FROM long_term_metrics 
-        WHERE metric_name = ? AND timestamp > ?
-        ORDER BY timestamp
-        ''', (metric_name, cutoff))
-        
-        results = cursor.fetchall()
-        conn.close()
-        
-        if len(results) < 2:
+        if not self.ensure_tables_exist():
             return None
-        
-        values = [r[0] for r in results]
-        timestamps = [r[1] for r in results]
-        
-        # Calculate simple linear trend
-        x = np.arange(len(values))
-        try:
-            slope, intercept = np.polyfit(x, values, 1)
-            trend = "increasing" if slope > 0.1 else "decreasing" if slope < -0.1 else "stable"
             
-            return {
-                'values': values,
-                'timestamps': timestamps,
-                'trend': trend,
-                'slope': slope,
-                'current': values[-1],
-                'average': statistics.mean(values),
-                'min': min(values),
-                'max': max(values)
-            }
-        except:
+        try:
+            conn = sqlite3.connect(self.db_path)
+            cursor = conn.cursor()
+            
+            cutoff = datetime.datetime.now() - datetime.timedelta(hours=hours)
+            cursor.execute('''
+            SELECT metric_value, timestamp 
+            FROM long_term_metrics 
+            WHERE metric_name = ? AND timestamp > ?
+            ORDER BY timestamp
+            ''', (metric_name, cutoff))
+            
+            results = cursor.fetchall()
+            conn.close()
+            
+            if len(results) < 2:
+                return None
+            
+            values = [r[0] for r in results]
+            timestamps = [r[1] for r in results]
+            
+            # Calculate simple linear trend
+            x = np.arange(len(values))
+            try:
+                slope, intercept = np.polyfit(x, values, 1)
+                trend = "increasing" if slope > 0.1 else "decreasing" if slope < -0.1 else "stable"
+                
+                return {
+                    'values': values,
+                    'timestamps': timestamps,
+                    'trend': trend,
+                    'slope': slope,
+                    'current': values[-1],
+                    'average': statistics.mean(values),
+                    'min': min(values),
+                    'max': max(values)
+                }
+            except:
+                return None
+                
+        except sqlite3.OperationalError as e:
+            if "no such table" in str(e):
+                logger.warning("Tables missing")
+                return None
+            else:
+                logger.error(f"Database error: {e}")
+                return None
+        except Exception as e:
+            logger.error(f"Error getting metric trend: {e}")
             return None
 
 class ServiceTroubleshooter:
