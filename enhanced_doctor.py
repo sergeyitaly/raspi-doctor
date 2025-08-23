@@ -43,6 +43,18 @@ class KnowledgeBase:
     def __init__(self, db_path=KNOWLEDGE_DB):
         self.db_path = db_path
         self.db_path.parent.mkdir(parents=True, exist_ok=True)
+        logger.info(f"Initializing database at: {db_path}")
+        logger.info(f"Database directory exists: {db_path.parent.exists()}")
+        logger.info(f"Database file exists: {db_path.exists()}")
+        
+        # Ensure proper permissions
+        try:
+            if not db_path.exists():
+                db_path.touch(mode=0o666)
+                logger.info("Created new database file")
+        except Exception as e:
+            logger.error(f"Could not create database file: {e}")
+            
         self.init_db()
         self.ensure_tables_exist()
         
@@ -126,7 +138,30 @@ class KnowledgeBase:
         except Exception as e:
             logger.error(f"Error checking tables: {e}")
             return False
-        
+
+    def debug_database_status(self):
+        """Debug method to check database status"""
+        try:
+            conn = sqlite3.connect(str(self.db_path))
+            cursor = conn.cursor()
+            
+            # Check tables
+            cursor.execute("SELECT name FROM sqlite_master WHERE type='table'")
+            tables = [row[0] for row in cursor.fetchall()]
+            logger.info(f"Database tables: {tables}")
+            
+            # Check row counts
+            for table in tables:
+                cursor.execute(f"SELECT COUNT(*) FROM {table}")
+                count = cursor.fetchone()[0]
+                logger.info(f"Table {table} has {count} rows")
+            
+            conn.close()
+            return True
+        except Exception as e:
+            logger.error(f"Database debug failed: {e}")
+            return False
+
     def store_pattern(self, pattern_type, pattern_data, severity=0.5, confidence=0.5, solution=""):
         """Store a pattern in the knowledge base"""
         if not self.ensure_tables_exist():
@@ -176,9 +211,17 @@ class KnowledgeBase:
             return False
             
         try:
-            conn = sqlite3.connect(self.db_path)
+            conn = sqlite3.connect(str(self.db_path))  # Use string path
             cursor = conn.cursor()
             
+            # Debug: Check if table exists
+            cursor.execute("SELECT name FROM sqlite_master WHERE type='table' AND name='long_term_metrics'")
+            table_exists = cursor.fetchone()
+            if not table_exists:
+                logger.error("long_term_metrics table doesn't exist!")
+                conn.close()
+                return False
+                
             # Convert context to JSON string if it's a dict
             context_str = None
             if context is not None:
@@ -187,16 +230,22 @@ class KnowledgeBase:
                 else:
                     context_str = str(context)
             
+            timestamp = datetime.datetime.now().isoformat()
+            logger.debug(f"Storing metric: {metric_name}={metric_value} at {timestamp}")
+            
             cursor.execute('''
             INSERT INTO long_term_metrics (metric_name, metric_value, timestamp, context)
             VALUES (?, ?, ?, ?)
-            ''', (metric_name, float(metric_value), datetime.datetime.now().isoformat(), context_str))
+            ''', (metric_name, float(metric_value), timestamp, context_str))
             
             conn.commit()
             conn.close()
-            logger.debug(f"Stored metric: {metric_name}={metric_value}")
+            logger.info(f"Successfully stored metric: {metric_name}={metric_value}")
             return True
             
+        except sqlite3.OperationalError as e:
+            logger.error(f"SQLite operational error storing metric {metric_name}: {e}")
+            return False
         except Exception as e:
             logger.error(f"Error storing metric {metric_name}: {e}")
             return False
@@ -1320,9 +1369,13 @@ def main():
     kb = KnowledgeBase()
     logger.info("Knowledge database initialized at %s", KNOWLEDGE_DB)
 
+    kb.debug_database_status()
+
     # Run the autonomous doctor
     doctor = AutonomousDoctor(knowledge_base=kb)
     results = doctor.run_enhanced()
+
+    kb.debug_database_status()
 
     # Print summary
     print("\n=== Enhanced Doctor Summary ===")
