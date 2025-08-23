@@ -7,10 +7,16 @@ from pathlib import Path
 
 from ollama_client import summarize_text
 
+# Initialize Flask app
+app = Flask(__name__)
+
 LOG_FILE = Path("/var/log/ai_health/health.log")
 LOG_DIR = Path("/var/log/ai_health")
 
-app = Flask(__name__)
+# Add static file route
+@app.route('/static/<path:filename>')
+def static_files(filename):
+    return send_from_directory('static', filename)
 
 def read_tail(path: Path, max_bytes=120000):
     if not path.exists():
@@ -131,17 +137,10 @@ def api_hardware():
     path = LOG_DIR / "hardware.log"
     return jsonify({"report": path.read_text()[-5000:] if path.exists() else "No hardware logs."})
 
-
-@app.route('/static/<path:filename>')
-def static_files(filename):
-    return send_from_directory('static', filename)
-
 @app.route("/")
 def index():
     latest = read_tail(LOG_FILE, max_bytes=60000)
     return render_template("index.html", latest=latest)
-
-
 
 if __name__ == "__main__":
     app.run(host="0.0.0.0", port=int(os.getenv("PORT", "8010")))
