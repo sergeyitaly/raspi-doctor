@@ -1,11 +1,13 @@
 #!/usr/bin/env python3
 
 import os
+import threading
 from flask import Flask, render_template, jsonify, send_from_directory
 from datetime import datetime
 from pathlib import Path
 
 from ollama_client import summarize_text
+from enhanced_doctor import AutonomousDoctor, KnowledgeBase
 
 # Initialize Flask app
 app = Flask(__name__)
@@ -13,19 +15,38 @@ app = Flask(__name__)
 LOG_FILE = Path("/var/log/ai_health/health.log")
 LOG_DIR = Path("/var/log/ai_health")
 
-def init_knowledge_db():
+# Global doctor instance
+doctor = None
+kb = None
+
+def init_doctor():
+    global doctor, kb
     try:
-        from enhanced_doctor import KnowledgeBase
         kb = KnowledgeBase()
         kb.ensure_tables_exist()
-        print("Knowledge database initialized successfully")
+        doctor = AutonomousDoctor(knowledge_base=kb)
+        print("Doctor and knowledge database initialized successfully")
         return True
     except Exception as e:
-        print(f"Failed to initialize knowledge database: {e}")
+        print(f"Failed to initialize doctor: {e}")
         return False
 
-init_knowledge_db()
+def run_doctor_async():
+    """Run doctor in background thread"""
+    def doctor_worker():
+        try:
+            if doctor:
+                results = doctor.run_enhanced()
+                print(f"Doctor run completed. Actions: {len(results)}")
+        except Exception as e:
+            print(f"Error in doctor worker: {e}")
+    
+    thread = threading.Thread(target=doctor_worker)
+    thread.daemon = True
+    thread.start()
+    return thread
 
+init_doctor()
 
 def read_tail(path: Path, max_bytes=120000):
     if not path.exists():
@@ -39,6 +60,39 @@ def read_tail(path: Path, max_bytes=120000):
         return data.decode("utf-8", errors="replace")
     except:
         return data.decode("latin1", errors="replace")
+
+@app.route("/api/run-doctor")
+def api_run_doctor():
+    """Trigger a doctor run manually"""
+    try:
+        thread = run_doctor_async()
+        return jsonify({"status": "started", "thread": thread.name})
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+@app.route("/api/db-status")
+def api_db_status():
+    """Get database status"""
+    try:
+        if kb:
+            # Create a simple debug output
+            conn = sqlite3.connect(str(kb.db_path))
+            cursor = conn.cursor()
+            
+            cursor.execute("SELECT name FROM sqlite_master WHERE type='table'")
+            tables = [row[0] for row in cursor.fetchall()]
+            
+            status = {}
+            for table in tables:
+                cursor.execute(f"SELECT COUNT(*) FROM {table}")
+                count = cursor.fetchone()[0]
+                status[table] = count
+            
+            conn.close()
+            return jsonify(status)
+        return jsonify({"error": "Knowledge base not initialized"})
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
 
 @app.route("/api/network")
 def api_network():
@@ -58,7 +112,6 @@ def api_network():
             return jsonify({"summary": f"Ollama unavailable: {e}"})
     except Exception as e:
         return jsonify({"summary": f"Network analysis failed: {e}"})
-
 
 @app.route("/api/security")
 def api_security():

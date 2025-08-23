@@ -91,10 +91,6 @@ ollama pull tinyllama  # ~600MB - good for testing
 # or
 ollama pull phi3:mini  # ~1.8GB - better quality
 
-# Move binary to /usr/local/bin and make executable
-sudo mv ollama /usr/local/bin/
-sudo chmod +x /usr/local/bin/ollama
-
 # Test
 ollama --version
 
@@ -111,3 +107,6 @@ sudo smartctl -a /dev/mmcblk0
 chmod +x /opt/pi-health-ai/setup_pi_doctor.sh
 sudo /opt/pi-health-ai/setup_pi_doctor.sh
 sudo systemctl status collect_health.timer raspi_doctor.timer netcheck.timer secscan.timer
+
+sudo chown -R pi:pi /var/log/ai_health/
+sudo chmod -R 755 /var/log/ai_health/
