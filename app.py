@@ -323,17 +323,47 @@ def api_security():
 @app.route("/api/summary")
 def api_summary():
     try:
-        text = read_tail(LOG_FILE, max_bytes=60000)  # Reduced from 120000
+        text = read_tail(LOG_FILE, max_bytes=60000)
         if not text.strip():
             return jsonify({"ok": False, "summary": "No logs found yet. Wait for the collector to run.", "ts": datetime.now().isoformat()})
         
-        # Use the optimized summarize_text
+        # Use the optimized summarize_text with timeout handling
         from ollama_client import summarize_text
         summary = summarize_text(text)
         return jsonify({"ok": True, "summary": summary, "ts": datetime.now().isoformat()})
     except Exception as e:
-        return jsonify({"ok": False, "summary": f"Error querying Ollama: {e}", "ts": datetime.now().isoformat()}), 500
+        return jsonify({
+            "ok": False, 
+            "summary": f"Error generating summary: {str(e)}", 
+            "ts": datetime.now().isoformat()
+        }), 500
 
+
+@app.route("/api/health")
+def api_health():
+    """Simple health check that doesn't depend on Ollama"""
+    try:
+        # Check if Ollama port is open (without making HTTP requests)
+        import socket
+        sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        sock.settimeout(2)
+        result = sock.connect_ex(('127.0.0.1', 11434))
+        sock.close()
+        
+        ollama_status = "online" if result == 0 else "offline"
+        
+        return jsonify({
+            "status": "ok",
+            "ollama_port_open": ollama_status == "online",
+            "timestamp": datetime.now().isoformat()
+        })
+    except Exception as e:
+        return jsonify({
+            "status": "error",
+            "error": str(e),
+            "timestamp": datetime.now().isoformat()
+        }), 500
+    
 @app.route("/api/hardware")
 def api_hardware():
     path = LOG_DIR / "hardware.log"
@@ -382,9 +412,9 @@ def api_system_health():
 
 @app.route("/api/ollama-status")
 def api_ollama_status():
-    """Check if Ollama server is running with optimized timeout"""
+    """Check if Ollama server is running with better timeout handling"""
     try:
-        # Use a very short timeout just to check if Ollama is responsive
+        # Use a very short timeout just to check basic connectivity
         response = requests.get(f"{OLLAMA_HOST}/api/tags", timeout=2)
         
         if response.status_code == 200:
@@ -406,9 +436,9 @@ def api_ollama_status():
             "message": "Cannot connect to Ollama server"
         })
     except requests.exceptions.Timeout:
-        # This is OK - Ollama might be busy but we know it's running
+        # Ollama is running but busy - this is normal on Raspberry Pi
         return jsonify({
-            "status": "online",  # Changed from "timeout" to "online"
+            "status": "online",
             "message": "Ollama is running but busy processing requests",
             "models": [{"name": "tinyllama"}, {"name": "phi3:mini"}]  # Provide default models
         })
@@ -417,22 +447,27 @@ def api_ollama_status():
             "status": "error",
             "message": f"Error checking Ollama status: {str(e)}"
         })
-
+    
 @app.route('/api/test-ollama', methods=['POST'])
 def test_ollama():
     try:
         data = request.get_json()
         prompt = data.get('prompt', 'Hello')
         
-        # Simple test request to Ollama
+        # Use a longer timeout for Raspberry Pi but handle timeouts gracefully
         response = requests.post(
-            'http://localhost:11434/api/generate',
+            f'{OLLAMA_HOST}/api/generate',
             json={
                 'model': 'tinyllama',
                 'prompt': prompt,
-                'stream': False
+                'stream': False,
+                'options': {
+                    'num_predict': 20,        # Short responses
+                    'num_thread': 2,          # Limit CPU usage
+                    'temperature': 0.1
+                }
             },
-            timeout=30
+            timeout=45  # 45 second timeout
         )
         
         if response.status_code == 200:
@@ -441,9 +476,19 @@ def test_ollama():
         else:
             return jsonify({'success': False, 'error': f'Ollama error: {response.status_code}'})
             
+    except requests.exceptions.Timeout:
+        return jsonify({
+            'success': False, 
+            'error': 'Ollama request timed out. The Raspberry Pi is processing slowly. Try a shorter prompt.'
+        })
+    except requests.exceptions.ConnectionError:
+        return jsonify({
+            'success': False, 
+            'error': 'Cannot connect to Ollama server. Make sure Ollama is running.'
+        })
     except Exception as e:
         return jsonify({'success': False, 'error': str(e)})
-
+    
 @app.route("/api/temperature")
 def api_temperature():
     """Get CPU temperature with multiple fallback methods"""

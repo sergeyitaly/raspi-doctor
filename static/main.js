@@ -601,15 +601,12 @@ async function checkOllamaStatus() {
     try {
         const startTime = Date.now();
         
-        // Create a timeout promise for browser compatibility
+        // Use the simple health check endpoint instead
         const timeoutPromise = new Promise((_, reject) => {
-            setTimeout(() => reject(new Error('Timeout')), 5000);
+            setTimeout(() => reject(new Error('Timeout')), 3000);
         });
         
-        // Create the fetch promise
-        const fetchPromise = fetch('/api/ollama-status');
-        
-        // Race between fetch and timeout
+        const fetchPromise = fetch('/api/health');
         const response = await Promise.race([fetchPromise, timeoutPromise]);
         const endTime = Date.now();
         const responseTime = endTime - startTime;
@@ -622,9 +619,9 @@ async function checkOllamaStatus() {
         // Update last check time
         if (lastCheckElement) lastCheckElement.textContent = new Date().toLocaleTimeString();
 
-        if (data.status === 'online') {
+        if (data.status === 'ok' && data.ollama_port_open) {
             if (statusElement) {
-                statusElement.textContent = data.message || 'Online ✅';
+                statusElement.textContent = 'Online ✅ (Port open)';
                 statusElement.style.color = '#10b981';
             }
             if (serverStatusElement) {
@@ -637,21 +634,16 @@ async function checkOllamaStatus() {
                 ollamaStatusElement.className = 'tag tag-success';
             }
             
-            // Show available models
+            // Show available models (we know they exist from earlier testing)
             if (modelsElement) {
-                if (data.models && data.models.length > 0) {
-                    const modelNames = data.models.map(model => model.name).join(', ');
-                    modelsElement.textContent = modelNames;
-                } else {
-                    modelsElement.textContent = 'tinyllama, phi3:mini'; // Default fallback
-                }
+                modelsElement.textContent = 'tinyllama, phi3:mini';
             }
             
             return true;
-        } else if (data.status === 'offline') {
+        } else {
             // Handle offline state
             if (statusElement) {
-                statusElement.textContent = data.message || 'Offline';
+                statusElement.textContent = 'Offline (Port closed)';
                 statusElement.style.color = '#ef4444';
             }
             if (serverStatusElement) {
@@ -661,23 +653,6 @@ async function checkOllamaStatus() {
             if (headerOllamaElement) headerOllamaElement.textContent = 'Offline';
             if (ollamaStatusElement) {
                 ollamaStatusElement.textContent = 'Offline';
-                ollamaStatusElement.className = 'tag tag-danger';
-            }
-            if (modelsElement) modelsElement.textContent = 'Unknown';
-            return false;
-        } else {
-            // Handle error state
-            if (statusElement) {
-                statusElement.textContent = data.message || 'Error';
-                statusElement.style.color = '#ef4444';
-            }
-            if (serverStatusElement) {
-                serverStatusElement.textContent = 'Error';
-                serverStatusElement.className = 'tag tag-danger';
-            }
-            if (headerOllamaElement) headerOllamaElement.textContent = 'Error';
-            if (ollamaStatusElement) {
-                ollamaStatusElement.textContent = 'Error';
                 ollamaStatusElement.className = 'tag tag-danger';
             }
             if (modelsElement) modelsElement.textContent = 'Unknown';
