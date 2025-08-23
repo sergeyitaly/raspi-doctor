@@ -55,6 +55,28 @@ document.addEventListener('DOMContentLoaded', function() {
 });
 
 function setupEventListeners() {
+
+        const testOllamaBtn = document.getElementById('test-ollama');
+        if (testOllamaBtn) {
+            testOllamaBtn.addEventListener('click', async function() {
+                this.disabled = true;
+                this.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Testing...';
+                
+                const isOnline = await checkOllamaStatus();
+                
+                this.disabled = false;
+                this.innerHTML = '<i class="fas fa-bolt"></i> Test Now';
+                
+                if (isOnline) {
+                    addOllamaAction('✅ Ollama server is online and responding', 'ollama-success');
+                } else {
+                    addOllamaAction('❌ Ollama server is offline or not responding', 'ollama-error');
+                }
+            });
+        }
+        
+
+
     document.getElementById('ai-diagnose').onclick = function() {
         this.disabled = true;
         runDoctorDiagnosis();
@@ -491,24 +513,6 @@ function updateChart() {
       }
     }
 
-    // Test Ollama connection on button click
-    document.getElementById('test-ollama').addEventListener('click', async function() {
-      this.disabled = true;
-      this.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Testing...';
-      
-      const isOnline = await checkOllamaStatus();
-      
-      this.disabled = false;
-      this.innerHTML = '<i class="fas fa-bolt"></i> Test Now';
-      
-      if (isOnline) {
-        // Show success message
-        addOllamaAction('✅ Ollama server is online and responding', 'ollama-success');
-      } else {
-        // Show error message
-        addOllamaAction('❌ Ollama server is offline or not responding', 'ollama-error');
-      }
-    });
 
     // Simple ollama action function for status messages
     function addOllamaAction(message, className) {
