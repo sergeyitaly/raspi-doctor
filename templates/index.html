@@ -24,7 +24,7 @@
             <div class="status-indicator ok"></div>
             <div>
               <div class="status-text">System</div>
-              <div class="status-value">OK</div>
+              <div class="status-value" id="header-status">OK</div>
             </div>
           </div>
           <div class="status-card ok">
@@ -37,8 +37,8 @@
           <div class="status-card ok">
             <div class="status-indicator ok"></div>
             <div>
-              <div class="status-text">Network</div>
-              <div class="status-value">Stable</div>
+              <div class="status-text">Memory</div>
+              <div class="status-value" id="header-memory">--%</div>
             </div>
           </div>
         </div>
@@ -75,13 +75,13 @@
 
       <div class="metric-card">
         <div class="metric-header">
-          <div class="metric-title">Network Uptime</div>
-          <i class="fas fa-wifi metric-icon"></i>
+          <div class="metric-title">Disk Usage</div>
+          <i class="fas fa-hard-drive metric-icon"></i>
         </div>
-        <div class="metric-value">99.8%</div>
-        <div class="metric-trend trend-down">
-          <i class="fas fa-arrow-down"></i>
-          <span>0.1%</span>
+        <div class="metric-value" id="metric-disk">--%</div>
+        <div class="metric-trend trend-neutral" id="disk-trend">
+          <i class="fas fa-minus"></i>
+          <span>Loading...</span>
         </div>
       </div>
 
@@ -90,9 +90,9 @@
           <div class="metric-title">AI Doctor</div>
           <i class="fas fa-brain metric-icon"></i>
         </div>
-        <div class="metric-value">Active</div>
+        <div class="metric-value" id="ai-doctor-status">Active</div>
         <div class="metric-trend">
-          <span class="tag tag-success">Ollama Ready</span>
+          <span class="tag tag-success" id="ollama-status">Ollama Ready</span>
         </div>
       </div>
     </div>
@@ -139,6 +139,32 @@
         </div>
       </div>
 
+      <!-- Database Metrics Card -->
+      <div class="card">
+        <div class="card-header">
+          <h2><i class="fas fa-database card-icon"></i> Database Metrics</h2>
+          <span class="tag tag-info" id="db-status">Active</span>
+        </div>
+        <div class="card-content compact-content">
+          <div class="stat-row">
+            <span class="stat-label">Patterns Learned:</span>
+            <span class="stat-value" id="patterns-count">--</span>
+          </div>
+          <div class="stat-row">
+            <span class="stat-label">Actions Taken:</span>
+            <span class="stat-value" id="actions-count">--</span>
+          </div>
+          <div class="stat-row">
+            <span class="stat-label">Metrics Stored:</span>
+            <span class="stat-value" id="metrics-count">--</span>
+          </div>
+          <div class="stat-row">
+            <span class="stat-label">Success Rate:</span>
+            <span class="stat-value" id="success-rate">--%</span>
+          </div>
+        </div>
+      </div>
+
       <!-- AI Doctor Live Actions -->
       <div class="card">
         <div class="card-header">
@@ -150,14 +176,6 @@
             <div class="ollama-action">
               <div class="timestamp">Just now</div>
               <div class="ollama-thinking">🤖 Analyzing system health patterns...</div>
-            </div>
-            <div class="ollama-action">
-              <div class="timestamp">2 min ago</div>
-              <div class="ollama-success">✅ Cleared cache: 250MB memory freed</div>
-            </div>
-            <div class="ollama-action">
-              <div class="timestamp">5 min ago</div>
-              <div class="ollama-warning">⚠️ High CPU temp: Activated cooling protocol</div>
             </div>
           </div>
         </div>
@@ -190,7 +208,7 @@
           <span class="tag tag-success">Secure</span>
         </div>
         <div class="card-content">
-          <div class="preformatted" id="security">✓ Firewall active\n✓ No failed logins\n✓ Regular updates</div>
+          <div class="preformatted" id="security">Loading security data...</div>
         </div>
       </div>
 

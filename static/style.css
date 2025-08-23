@@ -537,3 +537,54 @@
       }
     }
   
+.ollama-error {
+    color: var(--danger);
+}
+
+.metric-trend.trend-up {
+    color: var(--success);
+}
+
+.metric-trend.trend-down {
+    color: var(--danger);
+}
+
+.metric-trend.trend-neutral {
+    color: var(--text-secondary);
+}
+
+/* Database status indicators */
+.tag-success {
+    background: rgba(16, 185, 129, 0.2);
+    color: var(--success);
+}
+
+.tag-warning {
+    background: rgba(245, 158, 11, 0.2);
+    color: var(--warning);
+}
+
+.tag-danger {
+    background: rgba(239, 68, 68, 0.2);
+    color: var(--danger);
+}
+
+.tag-info {
+    background: rgba(59, 130, 246, 0.2);
+    color: var(--info);
+}
+
+/* Loading animation */
+.loading {
+    display: inline-block;
+    width: 14px;
+    height: 14px;
+    border: 2px solid rgba(255, 255, 255, 0.3);
+    border-radius: 50%;
+    border-top-color: var(--primary);
+    animation: spin 1s ease-in-out infinite;
+}
+
+@keyframes spin {
+    to { transform: rotate(360deg); }
+}
