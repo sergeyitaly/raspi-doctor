@@ -1208,4 +1208,14 @@ def main():
     return 0
 
 if __name__ == "__main__":
-    exit(main())
+    # Make sure the log directory exists
+    LOG_DIR.mkdir(parents=True, exist_ok=True)
+
+    # Initialize the knowledge database
+    kb = KnowledgeBase()
+
+    logger.info("Knowledge database initialized at %s", KNOWLEDGE_DB)
+
+    # Optionally, start the doctor
+    doctor = AutonomousDoctor()
+    doctor.run_enhanced()
