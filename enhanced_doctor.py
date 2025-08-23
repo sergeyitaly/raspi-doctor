@@ -42,17 +42,15 @@ logger = logging.getLogger("enhanced_doctor")
 class KnowledgeBase:
     def __init__(self, db_path=KNOWLEDGE_DB):
         self.db_path = db_path
-        # Ensure the directory exists FIRST
         self.db_path.parent.mkdir(parents=True, exist_ok=True)
         self.init_db()
+        self.ensure_tables_exist()
         
     def init_db(self):
         """Initialize the knowledge database with error handling"""
         try:
             conn = sqlite3.connect(self.db_path)
             cursor = conn.cursor()
-            
-            # System patterns table
             cursor.execute('''
             CREATE TABLE IF NOT EXISTS system_patterns (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -68,7 +66,6 @@ class KnowledgeBase:
                 success_rate REAL
             )
             ''')
-            
             # Action outcomes table
             cursor.execute('''
             CREATE TABLE IF NOT EXISTS action_outcomes (
@@ -101,7 +98,6 @@ class KnowledgeBase:
             
         except Exception as e:
             logger.error(f"Failed to initialize database: {e}")
-            # Try to create at least the database file
             try:
                 conn = sqlite3.connect(self.db_path)
                 conn.close()
@@ -131,7 +127,6 @@ class KnowledgeBase:
             logger.error(f"Error checking tables: {e}")
             return False
     
-    # Add error handling to ALL database methods
     def get_similar_patterns(self, pattern_data, pattern_type=None, threshold=0.8):
         """Find similar patterns in the knowledge base"""
         if not self.ensure_tables_exist():
@@ -193,10 +188,6 @@ class KnowledgeBase:
         except Exception as e:
             logger.error(f"Error getting similar patterns: {e}")
             return []
-    
-    # Add similar error handling to ALL other database methods:
-    # store_pattern(), record_action_outcome(), store_metric(), 
-    # get_action_success_rate(), get_metric_trend()
     
     def get_action_success_rate(self, action_type, target=None):
         """Calculate the success rate of a specific action"""
@@ -417,7 +408,7 @@ class AutonomousDoctor:
         self.actions_enabled = self.config.get('actions', {})
         self.health_data = {}
         self.knowledge_base = KnowledgeBase()
-        
+
         if knowledge_base:
             self.knowledge_base = knowledge_base
         else:
