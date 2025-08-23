@@ -26,7 +26,6 @@ def read_tail(path: Path, max_bytes=120000):
     except:
         return data.decode("latin1", errors="replace")
 
-# API Routes
 @app.route("/api/network")
 def api_network():
     try:
@@ -34,15 +33,18 @@ def api_network():
         if not path.exists():
             return jsonify({"summary": "No network log."})
         
-        # Read the log content first
         log_content = path.read_text()[-5000:]
         if not log_content.strip():
             return jsonify({"summary": "No network data available."})
             
-        summary = summarize_text(log_content, "Summarize Raspberry Pi network stability in last 24h.")
-        return jsonify({"summary": summary})
+        try:
+            summary = summarize_text(log_content, "Summarize Raspberry Pi network stability in last 24h.")
+            return jsonify({"summary": summary})
+        except Exception as e:
+            return jsonify({"summary": f"Ollama unavailable: {e}"})
     except Exception as e:
-        return jsonify({"error": f"Network analysis failed: {str(e)}"}), 500
+        return jsonify({"summary": f"Network analysis failed: {e}"})
+
 
 @app.route("/api/security")
 def api_security():
