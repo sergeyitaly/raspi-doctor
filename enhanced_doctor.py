@@ -126,7 +126,118 @@ class KnowledgeBase:
         except Exception as e:
             logger.error(f"Error checking tables: {e}")
             return False
-    
+        
+    def store_pattern(self, pattern_type, pattern_data, severity=0.5, confidence=0.5, solution=""):
+        """Store a pattern in the knowledge base"""
+        if not self.ensure_tables_exist():
+            return False
+            
+        try:
+            pattern_hash = hashlib.md5(json.dumps(pattern_data, sort_keys=True).encode()).hexdigest()
+            serialized_data = pickle.dumps(pattern_data)
+            timestamp = datetime.datetime.now().isoformat()
+            
+            conn = sqlite3.connect(self.db_path)
+            cursor = conn.cursor()
+            
+            # Check if pattern already exists
+            cursor.execute('SELECT occurrence_count FROM system_patterns WHERE pattern_hash = ?', (pattern_hash,))
+            existing = cursor.fetchone()
+            
+            if existing:
+                # Update existing pattern
+                cursor.execute('''
+                UPDATE system_patterns 
+                SET last_seen = ?, occurrence_count = occurrence_count + 1 
+                WHERE pattern_hash = ?
+                ''', (timestamp, pattern_hash))
+            else:
+                # Insert new pattern
+                cursor.execute('''
+                INSERT INTO system_patterns 
+                (pattern_hash, pattern_type, pattern_data, first_seen, last_seen, 
+                occurrence_count, severity, confidence, solution, success_rate)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                ''', (pattern_hash, pattern_type, serialized_data, timestamp, timestamp, 
+                    1, severity, confidence, solution, 0.0))
+            
+            conn.commit()
+            conn.close()
+            return True
+            
+        except Exception as e:
+            logger.error(f"Error storing pattern: {e}")
+            return False
+
+    def store_metric(self, metric_name, metric_value, context=None):
+        """Store a metric value for trend analysis"""
+        if not self.ensure_tables_exist():
+            return False
+            
+        try:
+            conn = sqlite3.connect(self.db_path)
+            cursor = conn.cursor()
+            
+            cursor.execute('''
+            INSERT INTO long_term_metrics (metric_name, metric_value, timestamp, context)
+            VALUES (?, ?, ?, ?)
+            ''', (metric_name, metric_value, datetime.datetime.now().isoformat(), 
+                json.dumps(context) if context else None))
+            
+            conn.commit()
+            conn.close()
+            return True
+            
+        except Exception as e:
+            logger.error(f"Error storing metric: {e}")
+            return False
+
+    def store_action_outcome(self, action_type, target, reason, result, success, system_state_hash, improvement=0.0):
+        """Store the outcome of an action"""
+        if not self.ensure_tables_exist():
+            return False
+            
+        try:
+            conn = sqlite3.connect(self.db_path)
+            cursor = conn.cursor()
+            
+            cursor.execute('''
+            INSERT INTO action_outcomes 
+            (action_type, target, reason, result, success, timestamp, system_state_hash, improvement)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+            ''', (action_type, target, reason, result, 1 if success else 0, 
+                datetime.datetime.now().isoformat(), system_state_hash, improvement))
+            
+            conn.commit()
+            conn.close()
+            return True
+            
+        except Exception as e:
+            logger.error(f"Error storing action outcome: {e}")
+            return False
+
+    def calculate_similarity(self, pattern1, pattern2):
+        """Calculate similarity between two patterns (simple implementation)"""
+        # This is a simple implementation - you might want to improve this
+        if not isinstance(pattern1, dict) or not isinstance(pattern2, dict):
+            return 0.0
+        
+        common_keys = set(pattern1.keys()) & set(pattern2.keys())
+        if not common_keys:
+            return 0.0
+        
+        similarity = 0.0
+        for key in common_keys:
+            if pattern1[key] == pattern2[key]:
+                similarity += 1.0
+            elif isinstance(pattern1[key], (int, float)) and isinstance(pattern2[key], (int, float)):
+                # For numeric values, calculate relative similarity
+                max_val = max(abs(pattern1[key]), abs(pattern2[key]))
+                if max_val > 0:
+                    similarity += 1.0 - (abs(pattern1[key] - pattern2[key]) / max_val)
+        
+        return similarity / len(common_keys)
+
     def get_similar_patterns(self, pattern_data, pattern_type=None, threshold=0.8):
         """Find similar patterns in the knowledge base"""
         if not self.ensure_tables_exist():
@@ -991,18 +1102,16 @@ class AutonomousDoctor:
         try:
             with open(ACTIONS_LOG, 'a') as f:
                 f.write(log_entry + "\n")
-            with open(DECISIONS_LOG, 'a') as f:
-                f.write(json.dumps({
-                    'timestamp': datetime.datetime.now().isoformat(),
-                    'action': action,
-                    'target': target,
-                    'reason': reason,
-                    'result': result,
-                    'success': success
-                }) + "\n")
+            
+            # Also store in database
+            system_state_hash = hashlib.md5(json.dumps(self.health_data, sort_keys=True).encode()).hexdigest()
+            self.knowledge_base.store_action_outcome(
+                action, target, reason, result, success, system_state_hash
+            )
+            
         except Exception as e:
             logger.error(f"Error logging action: {e}")
-
+            
     def consult_ai(self, context: str) -> Optional[Dict]:
         """Consult AI for complex decisions"""
         try:
