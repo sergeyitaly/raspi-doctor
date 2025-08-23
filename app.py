@@ -7,6 +7,9 @@ import json
 from flask import Flask, render_template, jsonify, send_from_directory
 from datetime import datetime, timedelta
 from pathlib import Path
+import subprocess
+import requests
+OLLAMA_HOST = os.getenv("OLLAMA_HOST", "http://127.0.0.1:11434")
 
 from ollama_client import summarize_text
 from enhanced_doctor import AutonomousDoctor, KnowledgeBase
@@ -255,23 +258,25 @@ def api_actions():
         
     except Exception as e:
         return jsonify({"error": f"Failed to fetch actions: {str(e)}"}), 500
-
+    
 @app.route("/api/network")
 def api_network():
     try:
         path = LOG_DIR / "network.log"
         if not path.exists():
-            return jsonify({"summary": "No network log."})
+            return jsonify({"summary": "No network log file found."})
         
-        log_content = path.read_text()[-5000:]
+        log_content = path.read_text()[-2000:]  # Reduced from 5000
         if not log_content.strip():
-            return jsonify({"summary": "No network data available."})
+            return jsonify({"summary": "No recent network data available."})
             
         try:
-            summary = summarize_text(log_content, "Summarize Raspberry Pi network stability in last 24h.")
+            # Use the faster specialized analysis
+            from ollama_client import analyze_network_logs
+            summary = analyze_network_logs(log_content)
             return jsonify({"summary": summary})
         except Exception as e:
-            return jsonify({"summary": f"Ollama unavailable: {e}"})
+            return jsonify({"summary": f"Network analysis error: {e}"})
     except Exception as e:
         return jsonify({"summary": f"Network analysis failed: {e}"})
 
@@ -281,28 +286,49 @@ def api_security():
         auth_log = ""
         ufw_log = ""
         
+        # Read only recent entries
         if Path("/var/log/auth.log").exists():
-            auth_log = Path("/var/log/auth.log").read_text()[-5000:]
+            try:
+                # Use tail command for efficiency
+                auth_log = subprocess.run(
+                    ["tail", "-n", "100", "/var/log/auth.log"],
+                    capture_output=True, text=True, timeout=10
+                ).stdout
+            except:
+                auth_log = ""
         
         if Path("/var/log/ufw.log").exists():
-            ufw_log = Path("/var/log/ufw.log").read_text()[-5000:]
+            try:
+                ufw_log = subprocess.run(
+                    ["tail", "-n", "50", "/var/log/ufw.log"],
+                    capture_output=True, text=True, timeout=10
+                ).stdout
+            except:
+                ufw_log = ""
             
         context = auth_log + "\n" + ufw_log
         if not context.strip():
-            return jsonify({"report": "No security logs available."})
+            return jsonify({"report": "No recent security logs available."})
             
-        report = summarize_text(context, "Summarize suspicious security events: failed logins, attacks, blocked IPs.")
-        return jsonify({"report": report})
+        try:
+            # Use the faster specialized analysis
+            from ollama_client import analyze_security_logs
+            report = analyze_security_logs(context)
+            return jsonify({"report": report})
+        except Exception as e:
+            return jsonify({"report": f"Security analysis error: {e}"})
     except Exception as e:
         return jsonify({"error": f"Security analysis failed: {str(e)}"}), 500
 
 @app.route("/api/summary")
 def api_summary():
     try:
-        text = read_tail(LOG_FILE, max_bytes=120000)
+        text = read_tail(LOG_FILE, max_bytes=60000)  # Reduced from 120000
         if not text.strip():
             return jsonify({"ok": False, "summary": "No logs found yet. Wait for the collector to run.", "ts": datetime.now().isoformat()})
         
+        # Use the optimized summarize_text
+        from ollama_client import summarize_text
         summary = summarize_text(text)
         return jsonify({"ok": True, "summary": summary, "ts": datetime.now().isoformat()})
     except Exception as e:
@@ -353,6 +379,22 @@ def api_system_health():
         
     except Exception as e:
         return jsonify({"error": f"Failed to get system health: {str(e)}"}), 500
+
+
+@app.route("/api/ollama-status")
+def api_ollama_status():
+    """Check if Ollama server is running"""
+    try:
+        response = requests.get(f"{OLLAMA_HOST}/api/tags", timeout=5)
+        if response.status_code == 200:
+            return jsonify({
+                "status": "online",
+                "models": response.json().get("models", [])
+            })
+        else:
+            return jsonify({"status": "error", "message": "Ollama responded with error"})
+    except Exception as e:
+        return jsonify({"status": "offline", "message": str(e)})
 
 @app.route("/api/temperature")
 def api_temperature():

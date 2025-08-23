@@ -193,15 +193,80 @@ def summarize_text(text: str, prompt: str = None, max_chars=6000):
             "stream": False,
             "options": {
                 "temperature": 0.1,
-                "num_predict": 1000
+                "num_predict": 500
             }
         }
-        response = requests.post(url, json=payload, timeout=180)
+        response = requests.post(url, json=payload, timeout=60)
         response.raise_for_status()
         data = response.json()
         return data.get("response", "").strip()
     except Exception as e:
         return f"Error consulting AI: {str(e)}"
+
+def analyze_network_logs(log_content: str, max_chars=2000):
+    """Fast network analysis with reduced context"""
+    log_content = log_content[-max_chars:] if len(log_content) > max_chars else log_content
+    
+    prompt = textwrap.dedent("""
+    Analyze these network logs briefly. Focus on:
+    - Connection stability issues
+    - High latency or packet loss
+    - Security concerns
+    - 2-3 key recommendations
+    
+    Respond with 1-2 paragraphs maximum.
+    """)
+    
+    try:
+        url = f"{OLLAMA_HOST}/api/generate"
+        payload = {
+            "model": MODEL, 
+            "prompt": f"{prompt}\n\n--- NETWORK LOGS ---\n{log_content}",
+            "stream": False,
+            "options": {
+                "temperature": 0.1,
+                "num_predict": 300  # Very short response
+            }
+        }
+        response = requests.post(url, json=payload, timeout=30)
+        response.raise_for_status()
+        data = response.json()
+        return data.get("response", "").strip()
+    except Exception as e:
+        return f"Network analysis unavailable: {str(e)}"
+
+def analyze_security_logs(log_content: str, max_chars=2000):
+    """Fast security analysis with reduced context"""
+    log_content = log_content[-max_chars:] if len(log_content) > max_chars else log_content
+    
+    prompt = textwrap.dedent("""
+    Analyze these security logs briefly. Focus on:
+    - Failed login attempts
+    - Suspicious IP addresses
+    - Firewall/UFW events
+    - Critical security recommendations
+    
+    Respond with 1-2 paragraphs maximum.
+    """)
+    
+    try:
+        url = f"{OLLAMA_HOST}/api/generate"
+        payload = {
+            "model": MODEL, 
+            "prompt": f"{prompt}\n\n--- SECURITY LOGS ---\n{log_content}",
+            "stream": False,
+            "options": {
+                "temperature": 0.1,
+                "num_predict": 300
+            }
+        }
+        response = requests.post(url, json=payload, timeout=30)
+        response.raise_for_status()
+        data = response.json()
+        return data.get("response", "").strip()
+    except Exception as e:
+        return f"Security analysis unavailable: {str(e)}"
+    
 
 def consult_ai_for_service_issue(service_name: str, logs: str, service_status: str):
     """Consult AI for service troubleshooting with historical context"""

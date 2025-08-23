@@ -420,6 +420,133 @@ function updateChart() {
     }
 }
 
+
+    async function checkOllamaStatus() {
+      const statusElement = document.getElementById('ollama-status-text');
+      const serverStatusElement = document.getElementById('ollama-server-status');
+      const modelsElement = document.getElementById('ollama-models');
+      const responseTimeElement = document.getElementById('ollama-response-time');
+      const lastCheckElement = document.getElementById('ollama-last-check');
+      const headerOllamaElement = document.getElementById('header-ollama');
+      const ollamaStatusElement = document.getElementById('ollama-status');
+
+      try {
+        const startTime = Date.now();
+        const response = await fetch('/api/ollama-status', {
+          signal: AbortSignal.timeout(5000)
+        });
+        const endTime = Date.now();
+        const responseTime = endTime - startTime;
+
+        const data = await response.json();
+        
+        // Update response time
+        responseTimeElement.textContent = `${responseTime} ms`;
+        
+        // Update last check time
+        lastCheckElement.textContent = new Date().toLocaleTimeString();
+
+        if (data.status === 'online') {
+          statusElement.textContent = 'Online ✅';
+          statusElement.style.color = '#10b981';
+          serverStatusElement.textContent = 'Online';
+          serverStatusElement.className = 'tag tag-success';
+          headerOllamaElement.textContent = 'Online';
+          ollamaStatusElement.textContent = 'Online';
+          ollamaStatusElement.className = 'tag tag-success';
+          
+          // Show available models
+          if (data.models && data.models.length > 0) {
+            const modelNames = data.models.map(model => model.name).join(', ');
+            modelsElement.textContent = modelNames;
+          } else {
+            modelsElement.textContent = 'No models loaded';
+          }
+          
+          return true;
+        } else {
+          statusElement.textContent = `Error: ${data.message || 'Unknown error'}`;
+          statusElement.style.color = '#ef4444';
+          serverStatusElement.textContent = 'Error';
+          serverStatusElement.className = 'tag tag-danger';
+          headerOllamaElement.textContent = 'Error';
+          ollamaStatusElement.textContent = 'Error';
+          ollamaStatusElement.className = 'tag tag-danger';
+          modelsElement.textContent = 'Unknown';
+          return false;
+        }
+      } catch (error) {
+        console.error('Ollama status check failed:', error);
+        statusElement.textContent = `Offline: ${error.name === 'TimeoutError' ? 'Timeout' : error.message}`;
+        statusElement.style.color = '#ef4444';
+        serverStatusElement.textContent = 'Offline';
+        serverStatusElement.className = 'tag tag-danger';
+        headerOllamaElement.textContent = 'Offline';
+        ollamaStatusElement.textContent = 'Offline';
+        ollamaStatusElement.className = 'tag tag-danger';
+        modelsElement.textContent = 'Unknown';
+        responseTimeElement.textContent = 'Timeout';
+        lastCheckElement.textContent = new Date().toLocaleTimeString();
+        return false;
+      }
+    }
+
+    // Test Ollama connection on button click
+    document.getElementById('test-ollama').addEventListener('click', async function() {
+      this.disabled = true;
+      this.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Testing...';
+      
+      const isOnline = await checkOllamaStatus();
+      
+      this.disabled = false;
+      this.innerHTML = '<i class="fas fa-bolt"></i> Test Now';
+      
+      if (isOnline) {
+        // Show success message
+        addOllamaAction('✅ Ollama server is online and responding', 'ollama-success');
+      } else {
+        // Show error message
+        addOllamaAction('❌ Ollama server is offline or not responding', 'ollama-error');
+      }
+    });
+
+    // Simple ollama action function for status messages
+    function addOllamaAction(message, className) {
+      const actionsContainer = document.getElementById('ollama-actions');
+      const actionElement = document.createElement('div');
+      actionElement.className = 'ollama-action';
+      actionElement.innerHTML = `
+        <div class="timestamp">${new Date().toLocaleTimeString()}</div>
+        <div class="${className}">${message}</div>
+      `;
+      actionsContainer.prepend(actionElement);
+      
+      // Keep only last 5 actions
+      while (actionsContainer.children.length > 5) {
+        actionsContainer.removeChild(actionsContainer.lastChild);
+      }
+    }
+
+    // Initialize Ollama status check on page load
+    document.addEventListener('DOMContentLoaded', function() {
+      // Check Ollama status immediately
+      checkOllamaStatus();
+      
+      // Check every 30 seconds
+      setInterval(checkOllamaStatus, 30000);
+      
+      // Also update the main.js functionality
+      if (typeof setupEventListeners === 'function') {
+        setupEventListeners();
+      }
+      if (typeof loadInitialData === 'function') {
+        loadInitialData();
+      }
+      if (typeof initCharts === 'function') {
+        initCharts();
+      }
+    });
+
 // Load network and security data
 fetch('/api/network')
     .then(response => response.json())
