@@ -13,11 +13,6 @@ app = Flask(__name__)
 LOG_FILE = Path("/var/log/ai_health/health.log")
 LOG_DIR = Path("/var/log/ai_health")
 
-# Add static file route
-@app.route('/static/<path:filename>')
-def static_files(filename):
-    return send_from_directory('static', filename)
-
 def read_tail(path: Path, max_bytes=120000):
     if not path.exists():
         return ""
@@ -31,12 +26,7 @@ def read_tail(path: Path, max_bytes=120000):
     except:
         return data.decode("latin1", errors="replace")
 
-@app.route("/")
-def index():
-    latest = read_tail(LOG_FILE, max_bytes=60000)
-    return render_template("index.html", latest=latest)
-
-# API Routes - add these BEFORE the main route to ensure they're matched first
+# API Routes
 @app.route("/api/network")
 def api_network():
     try:
@@ -86,28 +76,22 @@ def api_summary():
         return jsonify({"ok": True, "summary": summary, "ts": datetime.now().isoformat()})
     except Exception as e:
         return jsonify({"ok": False, "summary": f"Error querying Ollama: {e}", "ts": datetime.now().isoformat()}), 500
-    
+
 @app.route("/api/hardware")
 def api_hardware():
     path = LOG_DIR / "hardware.log"
     return jsonify({"report": path.read_text()[-5000:] if path.exists() else "No hardware logs."})
 
-@app.route('/debug/template')
-def debug_template():
-    template_path = Path('templates/index.html')
-    if not template_path.exists():
-        return "Template does not exist!", 404
-    
-    content = template_path.read_text()
-    # Check if the template has correct static references
-    has_correct_css = 'url_for(\'static\', filename=\'style.css\')' in content
-    has_correct_js = 'url_for(\'static\', filename=\'main.js\')' in content
-    
-    return jsonify({
-        'template_exists': True,
-        'has_correct_css_reference': has_correct_css,
-        'has_correct_js_reference': has_correct_js
-    })
+# Static files route
+@app.route('/static/<path:filename>')
+def static_files(filename):
+    return send_from_directory('static', filename)
+
+# Main route - should be LAST to avoid catching API routes
+@app.route("/")
+def index():
+    latest = read_tail(LOG_FILE, max_bytes=60000)
+    return render_template("index.html", latest=latest)
 
 if __name__ == "__main__":
     app.run(host="0.0.0.0", port=int(os.getenv("PORT", "8010")))
