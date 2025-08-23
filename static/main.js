@@ -1,5 +1,3 @@
-// static/main.js - Enhanced for real-time updates
-
 // DOM Elements
 const elements = {
     analyze: document.getElementById('analyze'),
@@ -18,34 +16,26 @@ const elements = {
     totalDisk: document.getElementById('total-disk'),
     overallHealth: document.getElementById('overall-health'),
     aiStatus: document.getElementById('ai-status'),
-    ollamaActions: document.getElementById('ollama-actions'),
-    cpuTrend: document.getElementById('cpu-trend'),
-    memoryTrend: document.getElementById('memory-trend')
+    ollamaActions: document.getElementById('ollama-actions')
 };
 
-// Initialize charts and data
+// Initialize charts
 let hardwareChart;
 let cpuData = [];
 let memoryData = [];
-let lastCpuValue = 0;
-let lastMemoryValue = 0;
 
-// Load initial data and set up periodic updates
+// Load initial data
 document.addEventListener('DOMContentLoaded', function() {
     initCharts();
+    simulateLiveData();
     loadInitialData();
-    setupEventListeners();
     
     // Set up periodic updates
-    setInterval(updateSystemHealth, 2000);
-    setInterval(updateSecurityStatus, 10000);
-    setInterval(updateNetworkStatus, 5000);
-    setInterval(addOllamaAction, 15000);
+    setInterval(updateLiveData, 2000);
+    setInterval(addOllamaAction, 10000);
     
-    // Initial updates
-    updateSystemHealth();
-    updateSecurityStatus();
-    updateNetworkStatus();
+    // Set up event listeners
+    setupEventListeners();
 });
 
 function setupEventListeners() {
@@ -67,83 +57,26 @@ function setupEventListeners() {
     };
 
     document.getElementById('refresh-logs').onclick = function() {
-        fetch('/api/health/history')
-            .then(response => response.json())
-            .then(data => {
-                elements.rawLogs.textContent = JSON.stringify(data, null, 2);
-            })
-            .catch(error => {
-                elements.rawLogs.textContent = 'Error loading logs: ' + error;
-            });
+        elements.rawLogs.textContent = 'Logs refreshed ' + new Date().toLocaleTimeString() + 
+            '\n' + elements.rawLogs.textContent;
     };
 
     elements.analyze.onclick = async () => {
         elements.analyze.disabled = true;
         elements.summary.innerHTML = "<div class='loading'></div> Analyzing with AI...";
         
-        try {
-            const response = await fetch('/api/health');
-            const healthData = await response.json();
+        // Simulate AI analysis
+        setTimeout(() => {
+            const analyses = [
+                "🤖 AI Analysis Complete:\n\n✅ System health: Good\n📊 CPU usage: Normal range\n💾 Memory: Efficient usage\n🌡️ Temperature: Within limits\n🔒 Security: No issues detected\n\nRecommendation: Continue current operations",
+                "🤖 System Assessment:\n\n⚠️ Moderate memory usage detected\n✅ CPU temperature optimal\n📶 Network stability: Excellent\n🔄 Suggest: Clear cache if memory exceeds 80%\n\nOverall: System performing well",
+                "🤖 Health Report:\n\n✅ All systems nominal\n📊 Load average: 1.2 (optimal)\n💾 Disk space: Plentiful\n🌡️ Thermal management: Effective\n\nStatus: No action required"
+            ];
             
-            // Simulate AI analysis based on real data
-            let analysis = generateAIAnalysis(healthData);
-            elements.summary.textContent = analysis;
-        } catch (error) {
-            elements.summary.textContent = "Error analyzing system: " + error;
-        } finally {
+            elements.summary.textContent = analyses[Math.floor(Math.random() * analyses.length)];
             elements.analyze.disabled = false;
-        }
+        }, 2000);
     };
-}
-
-function generateAIAnalysis(healthData) {
-    let analysis = "🤖 AI System Analysis:\n\n";
-    
-    // CPU analysis
-    if (healthData.cpu.temperature > 75) {
-        analysis += "🌡️ CPU Temperature: WARNING - High temperature detected\n";
-    } else if (healthData.cpu.temperature > 65) {
-        analysis += "🌡️ CPU Temperature: Noticeable heat\n";
-    } else {
-        analysis += "🌡️ CPU Temperature: Normal\n";
-    }
-    
-    if (healthData.cpu.percent > 80) {
-        analysis += "🚀 CPU Usage: High load\n";
-    } else {
-        analysis += "🚀 CPU Usage: Normal\n";
-    }
-    
-    // Memory analysis
-    if (healthData.memory.percent > 85) {
-        analysis += "💾 Memory: CRITICAL - High memory usage\n";
-    } else if (healthData.memory.percent > 70) {
-        analysis += "💾 Memory: Elevated usage\n";
-    } else {
-        analysis += "💾 Memory: Normal\n";
-    }
-    
-    // Disk analysis
-    if (healthData.disk.percent > 90) {
-        analysis += "💿 Disk: WARNING - Low disk space\n";
-    } else if (healthData.disk.percent > 80) {
-        analysis += "💿 Disk: Getting full\n";
-    } else {
-        analysis += "💿 Disk: Adequate space\n";
-    }
-    
-    // Network analysis
-    if (healthData.network.packet_loss_percent > 10) {
-        analysis += "📶 Network: Unstable connection\n";
-    } else if (healthData.network.packet_loss_percent > 5) {
-        analysis += "📶 Network: Some packet loss\n";
-    } else {
-        analysis += "📶 Network: Stable\n";
-    }
-    
-    analysis += `\nOverall Status: ${healthData.status.overall.toUpperCase()}`;
-    
-    return analysis;
 }
 
 function toggleLogs() {
@@ -152,53 +85,30 @@ function toggleLogs() {
 }
 
 function loadInitialData() {
-    // Initial placeholder data
-    elements.uptime.textContent = 'Loading...';
-    elements.loadAvg.textContent = 'Loading...';
-    elements.processCount.textContent = 'Loading...';
-    elements.cpuCores.textContent = 'Loading...';
-    elements.totalMemory.textContent = 'Loading...';
-    elements.totalDisk.textContent = 'Loading...';
+    // Simulate initial data load
+    elements.uptime.textContent = '3d 12h 45m';
+    elements.loadAvg.textContent = '1.2, 1.5, 1.8';
+    elements.processCount.textContent = '87';
+    elements.cpuCores.textContent = '4 cores';
+    elements.totalMemory.textContent = '4GB';
+    elements.totalDisk.textContent = '32GB free';
     
-    elements.network.textContent = 'Loading network data...';
-    elements.security.textContent = 'Loading security data...';
+    elements.network.textContent = '✓ Latency: 12ms\n✓ Packet loss: 0.1%\n✓ Bandwidth: 95Mbps';
 }
 
-async function updateSystemHealth() {
-    try {
-        const response = await fetch('/api/health');
-        const healthData = await response.json();
+function simulateLiveData() {
+    // Simulate live data updates
+    setInterval(() => {
+        const cpuTemp = (Math.random() * 15 + 50).toFixed(1);
+        const memoryUsage = Math.floor(Math.random() * 20 + 60);
         
-        if (healthData.error) {
-            console.error('Error fetching health data:', healthData.error);
-            return;
-        }
-        
-        // Update basic system info
-        elements.uptime.textContent = healthData.system.uptime;
-        elements.loadAvg.textContent = `${healthData.cpu.load_1min.toFixed(1)}, ${healthData.cpu.load_5min.toFixed(1)}, ${healthData.cpu.load_15min.toFixed(1)}`;
-        elements.processCount.textContent = healthData.system.processes;
-        elements.cpuCores.textContent = `${healthData.cpu.cores} cores`;
-        elements.totalMemory.textContent = `${healthData.memory.total_gb}GB`;
-        elements.totalDisk.textContent = `${healthData.disk.free_gb.toFixed(1)}GB free`;
-        
-        // Update metrics
-        elements.metricCpu.textContent = `${healthData.cpu.temperature.toFixed(1)}°C`;
-        elements.metricMemory.textContent = `${healthData.memory.percent.toFixed(1)}%`;
-        elements.headerCpu.textContent = `${healthData.cpu.temperature.toFixed(1)}°C`;
-        
-        // Update status indicators
-        updateStatusIndicator('overall', healthData.status.overall);
-        updateStatusIndicator('network', healthData.status.network);
-        updateStatusIndicator('security', healthData.status.security);
-        
-        // Update trend indicators
-        updateTrendIndicator('cpu', healthData.cpu.temperature);
-        updateTrendIndicator('memory', healthData.memory.percent);
+        elements.metricCpu.textContent = `${cpuTemp}°C`;
+        elements.metricMemory.textContent = `${memoryUsage}%`;
+        elements.headerCpu.textContent = `${cpuTemp}°C`;
         
         // Update chart data
-        cpuData.push(healthData.cpu.temperature);
-        memoryData.push(healthData.memory.percent);
+        cpuData.push(parseFloat(cpuTemp));
+        memoryData.push(memoryUsage);
         
         if (cpuData.length > 15) {
             cpuData.shift();
@@ -207,118 +117,24 @@ async function updateSystemHealth() {
         
         updateChart();
         
-    } catch (error) {
-        console.error('Error updating system health:', error);
-    }
+    }, 2000);
 }
 
-async function updateSecurityStatus() {
-    try {
-        const response = await fetch('/api/security');
-        const securityData = await response.json();
-        
-        let securityText = `✓ Firewall: ${securityData.firewall}\n`;
-        securityText += `✓ Failed logins: ${securityData.failed_logins}\n`;
-        
-        if (securityData.suspicious_ips.length > 0) {
-            securityText += `⚠️ Suspicious IPs: ${securityData.suspicious_ips.length} detected\n`;
-            securityData.suspicious_ips.forEach(ip => {
-                securityText += `   - ${ip.ip} (${ip.attempts} attempts)\n`;
-            });
-        } else {
-            securityText += `✓ No suspicious IP activity\n`;
-        }
-        
-        securityText += `✓ Status: ${securityData.status}`;
-        
-        elements.security.textContent = securityText;
-        
-    } catch (error) {
-        console.error('Error updating security status:', error);
-    }
-}
-
-async function updateNetworkStatus() {
-    try {
-        const response = await fetch('/api/health');
-        const healthData = await response.json();
-        
-        let networkText = `✓ Latency: ${healthData.network.latency_ms.toFixed(1)}ms\n`;
-        networkText += `✓ Packet loss: ${healthData.network.packet_loss_percent.toFixed(1)}%\n`;
-        networkText += `✓ Bandwidth: Sent ${healthData.network.sent_mb.toFixed(1)}MB, Received ${healthData.network.received_mb.toFixed(1)}MB\n`;
-        networkText += `✓ Status: ${healthData.status.network}`;
-        
-        elements.network.textContent = networkText;
-        
-    } catch (error) {
-        console.error('Error updating network status:', error);
-    }
-}
-
-function updateStatusIndicator(type, status) {
-    const statusMap = {
-        'good': 'ok',
-        'secure': 'ok', 
-        'stable': 'ok',
-        'warning': 'warning',
-        'critical': 'danger',
-        'unstable': 'warning',
-        'poor': 'danger'
-    };
+function updateLiveData() {
+    // Simulate network status changes
+    const networkStatus = Math.random() > 0.1 ? 'Stable' : 'Unstable';
+    const statusElement = document.querySelector('.status-card:nth-child(3) .status-value');
+    const indicator = document.querySelector('.status-card:nth-child(3) .status-indicator');
     
-    const statusClass = statusMap[status] || 'ok';
-    
-    if (type === 'overall') {
-        elements.overallHealth.textContent = status.charAt(0).toUpperCase() + status.slice(1);
-        elements.overallHealth.className = `tag tag-${statusClass}`;
-    } else if (type === 'network') {
-        const networkStatus = document.querySelector('.status-card:nth-child(3) .status-value');
-        const networkIndicator = document.querySelector('.status-card:nth-child(3) .status-indicator');
-        const networkCard = document.querySelector('.status-card:nth-child(3)');
-        
-        networkStatus.textContent = status.charAt(0).toUpperCase() + status.slice(1);
-        networkIndicator.className = `status-indicator ${statusClass}`;
-        networkCard.className = `status-card ${statusClass}`;
-    } else if (type === 'security') {
-        const securityStatus = document.querySelector('#security').previousElementSibling;
-        if (securityStatus && securityStatus.classList.contains('tag')) {
-            securityStatus.textContent = status.charAt(0).toUpperCase() + status.slice(1);
-            securityStatus.className = `tag tag-${statusClass}`;
-        }
-    }
-}
-
-function updateTrendIndicator(type, currentValue) {
-    const trendElement = type === 'cpu' ? elements.cpuTrend : elements.memoryTrend;
-    const lastValue = type === 'cpu' ? lastCpuValue : lastMemoryValue;
-    
-    if (lastValue === 0) {
-        // First reading, no trend yet
-        if (type === 'cpu') lastCpuValue = currentValue;
-        else lastMemoryValue = currentValue;
-        return;
-    }
-    
-    const diff = currentValue - lastValue;
-    const diffPercent = (diff / lastValue) * 100;
-    
-    if (Math.abs(diffPercent) < 1) {
-        // Minimal change, show neutral
-        trendElement.className = 'metric-trend trend-neutral';
-        trendElement.innerHTML = '<i class="fas fa-minus"></i><span>Stable</span>';
-    } else if (diff > 0) {
-        // Increasing
-        trendElement.className = 'metric-trend trend-up';
-        trendElement.innerHTML = `<i class="fas fa-arrow-up"></i><span>+${diff.toFixed(1)}</span>`;
+    if (networkStatus === 'Unstable') {
+        statusElement.textContent = 'Unstable';
+        indicator.className = 'status-indicator danger';
+        document.querySelector('.status-card:nth-child(3)').className = 'status-card danger';
     } else {
-        // Decreasing
-        trendElement.className = 'metric-trend trend-down';
-        trendElement.innerHTML = `<i class="fas fa-arrow-down"></i><span>${diff.toFixed(1)}</span>`;
+        statusElement.textContent = 'Stable';
+        indicator.className = 'status-indicator ok';
+        document.querySelector('.status-card:nth-child(3)').className = 'status-card ok';
     }
-    
-    // Update last value
-    if (type === 'cpu') lastCpuValue = currentValue;
-    else lastMemoryValue = currentValue;
 }
 
 function addOllamaAction() {
@@ -326,27 +142,27 @@ function addOllamaAction() {
         {
             message: "📊 Analyzing memory usage patterns...",
             class: "ollama-thinking",
-            timestamp: new Date().toLocaleTimeString()
+            timestamp: "Just now"
         },
         {
             message: "✅ Optimized swap usage: 150MB reclaimed",
             class: "ollama-success",
-            timestamp: new Date().toLocaleTimeString()
+            timestamp: "30s ago"
         },
         {
             message: "⚠️ Monitoring CPU temperature: Approaching threshold",
             class: "ollama-warning",
-            timestamp: new Date().toLocaleTimeString()
+            timestamp: "1m ago"
         },
         {
             message: "🔧 Adjusted process priorities for better performance",
             class: "ollama-success",
-            timestamp: new Date().toLocaleTimeString()
+            timestamp: "2m ago"
         },
         {
             message: "📡 Checking network connectivity...",
             class: "ollama-thinking",
-            timestamp: new Date().toLocaleTimeString()
+            timestamp: "3m ago"
         }
     ];
     
