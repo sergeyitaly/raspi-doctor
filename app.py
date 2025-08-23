@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 
 import os
-from flask import Flask, render_template, jsonify
+from flask import Flask, render_template, jsonify, send_from_directory
 from datetime import datetime
 from pathlib import Path
 
@@ -92,11 +92,6 @@ def api_v2_hardware():
 def api_v2_actions():
     return jsonify(parse_actions_log())
 
-@app.route("/")
-def index():
-    latest = read_tail(LOG_FILE, max_bytes=60000)
-    return render_template("index.html", latest=latest)
-
 @app.route("/api/summary")
 def api_summary():
     text = read_tail(LOG_FILE, max_bytes=120000)
@@ -136,5 +131,17 @@ def api_hardware():
     path = LOG_DIR / "hardware.log"
     return jsonify({"report": path.read_text()[-5000:] if path.exists() else "No hardware logs."})
 
+
+@app.route('/static/<path:filename>')
+def static_files(filename):
+    return send_from_directory('static', filename)
+
+@app.route("/")
+def index():
+    latest = read_tail(LOG_FILE, max_bytes=60000)
+    return render_template("index.html", latest=latest)
+
+
+
 if __name__ == "__main__":
-    app.run(host="0.0.0.0", port=int(os.getenv("PORT", "8080")))
+    app.run(host="0.0.0.0", port=int(os.getenv("PORT", "8010")))
