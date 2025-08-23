@@ -485,8 +485,45 @@ class ServiceTroubleshooter:
                 'reason': 'Service startup failure',
                 'solution': 'investigate_logs',
                 'alternative': 'check dependencies and configuration'
+            },
+                        'filesystem_recovery': {
+                'pattern': 'recovery required on readonly filesystem',
+                'reason': 'Filesystem was mounted read-only and required recovery',
+                'solution': 'check_disk_health',
+                'alternative': 'run filesystem check and monitor disk health'
+            },
+            'orphan_inodes': {
+                'pattern': 'orphan cleanup on readonly fs',
+                'reason': 'Filesystem had orphaned inodes indicating improper shutdown',
+                'solution': 'check_power_issues',
+                'alternative': 'ensure proper shutdown and check power supply'
+            },
+            'ext4_recovery': {
+                'pattern': 'EXT4-fs.*recovery',
+                'reason': 'EXT4 filesystem recovery performed during boot',
+                'solution': 'investigate_disk',
+                'alternative': 'check disk for errors and consider fsck'
             }
         }
+    
+    def analyze_journal_issues(self, journal_output):
+        """Analyze journal output for system-wide issues (not just services)"""
+        recommendations = []
+        
+        # Check against known patterns
+        for issue_name, issue_data in self.problematic_patterns.items():
+            if issue_data['pattern'].lower() in journal_output.lower():
+                recommendation = {
+                    'issue': issue_name,
+                    'reason': issue_data['reason'],
+                    'solution': issue_data['solution'],
+                    'alternative': issue_data['alternative'],
+                    'confidence': 'high',
+                    'source': 'journal_analysis'
+                }
+                recommendations.append(recommendation)
+        
+        return recommendations
     
     def analyze_service_issue(self, service_name, service_status_output):
         """Analyze service issues and recommend solutions"""
@@ -721,6 +758,35 @@ class AutonomousDoctor:
         
         return results
 
+    def detect_journal_issues(self):
+        """Detect system issues from journal logs"""
+        issues_found = []
+        
+        # Get recent journal entries
+        journal_logs = self.run_command("journalctl --since '1 hour ago' --no-pager | tail -200")
+        
+        # Analyze for filesystem and other system issues
+        journal_recommendations = self.troubleshooter.analyze_journal_issues(journal_logs)
+        
+        for recommendation in journal_recommendations:
+            issues_found.append({
+                'issue': recommendation['issue'],
+                'solution': recommendation['solution'],
+                'message': recommendation['reason'],
+                'command': self.get_fix_command(recommendation['solution'])
+            })
+        
+        return issues_found
+
+    def get_fix_command(self, solution_type):
+        """Get appropriate fix command for journal issues"""
+        fix_commands = {
+            'check_disk_health': 'sudo smartctl -a /dev/mmcblk0 && sudo fsck -n /dev/mmcblk0p2',
+            'check_power_issues': 'echo "Check power supply and consider using UPS"',
+            'investigate_disk': 'sudo dmesg | grep -i "sd\\|mmc" | tail -20 && sudo fsck -n /dev/mmcblk0p2',
+            'run_fsck': 'echo "Schedule filesystem check: sudo touch /forcefsck && sudo reboot"'
+        }
+        return fix_commands.get(solution_type, 'echo "No specific fix command"')
 
     def collect_health_data(self) -> Dict:
         """Collect comprehensive system health data"""
@@ -1284,9 +1350,15 @@ Respond with JSON: {{"solution": "disable|stop|reinstall|investigate", "reason":
         
         # Detect Raspberry-specific issues
         raspberry_issues = self.detect_raspberry_specific_issues()
-        if raspberry_issues:
-            logger.info(f"Detected Raspberry-specific issues: {len(raspberry_issues)}")
-            fix_results = self.execute_autonomous_fixes(raspberry_issues)
+        
+        # Detect journal issues (NEW)
+        journal_issues = self.detect_journal_issues()
+        
+        all_issues = raspberry_issues + journal_issues
+        
+        if all_issues:
+            logger.info(f"Detected issues: {len(all_issues)}")
+            fix_results = self.execute_autonomous_fixes(all_issues)
             for result in fix_results:
                 logger.info(f"Autonomous fix: {result}")
         
@@ -1311,7 +1383,7 @@ Respond with JSON: {{"solution": "disable|stop|reinstall|investigate", "reason":
         
         logger.info(f"Enhanced Doctor completed. Actions executed: {len(executed_actions)}")
         return executed_actions
-
+        
     def learn_from_issues(self):
         """Learn from recurring issues and adapt"""
         # Read past actions and results
