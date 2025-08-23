@@ -1,6 +1,8 @@
+# Update your setup script to include web service setup
+cat > setup_pi_doctor_final.sh << 'EOF'
 #!/bin/bash
 
-# Directories - CORRECTED for your setup
+# Directories
 BASE_DIR="/home/pi/raspi-doctor"
 LOG_DIR="/var/log/ai_health"
 SYSTEMD_DIR="$BASE_DIR"
@@ -57,14 +59,91 @@ for unit in collect_health.service collect_health.timer \
     fi
 done
 
-echo "Step 5: Reload systemd..."
+echo "Step 5: Setup web dashboard service on port 8010..."
+sudo tee /etc/systemd/system/pi-doctor-web.service > /dev/null << 'WEB_EOF'
+[Unit]
+Description=Pi Doctor Web Dashboard
+After=network.target enhanced_doctor.timer
+Wants=network.target
+
+[Service]
+Type=simple
+User=pi
+Group=pi
+WorkingDirectory=/home/pi/raspi-doctor
+Environment=PYTHONPATH=/home/pi/raspi-doctor
+Environment=OLLAMA_HOST=http://localhost:11434
+Environment=PORT=8010
+ExecStart=/home/pi/raspi-doctor/.venv/bin/python /home/pi/raspi-doctor/app.py
+Restart=always
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target
+WEB_EOF
+
+echo "Step 6: Reload systemd..."
 sudo systemctl daemon-reload
 
-echo "Step 6: Enable and start all timers..."
+echo "Step 7: Enable and start all timers and services..."
 for timer in collect_health.timer raspi_doctor.timer netcheck.timer secscan.timer; do
     sudo systemctl enable --now "$timer"
     echo "Enabled and started $timer"
 done
 
+# Enable and start web service
+sudo systemctl enable pi-doctor-web.service
+sudo systemctl start pi-doctor-web.service
+echo "Enabled and started pi-doctor-web.service on port 8010"
+
+echo "Step 8: Create startup script..."
+cat > "$BASE_DIR/start_pi_doctor.sh" << 'START_EOF'
+#!/bin/bash
+# Start all Pi Doctor services on port 8010
+
+echo "Starting Pi Doctor System on port 8010..."
+
+# Start Ollama if not running
+if ! curl -s http://localhost:11434/api/tags > /dev/null; then
+    echo "Starting Ollama..."
+    pkill -f "ollama serve"
+    nohup ollama serve > ~/ollama_server.log 2>&1 &
+    sleep 5
+fi
+
+# Start web dashboard on port 8010 if not running
+if ! systemctl is-active --quiet pi-doctor-web.service; then
+    echo "Starting Web Dashboard on port 8010..."
+    sudo systemctl start pi-doctor-web.service
+    sleep 3
+fi
+
+# Check if web dashboard is responding on port 8010
+if curl -s http://localhost:8010/api/summary > /dev/null; then
+    echo "Web dashboard is running on port 8010"
+else
+    echo "Warning: Web dashboard not responding on port 8010"
+fi
+
+# Run enhanced doctor once
+echo "Running Enhanced Doctor..."
+./enhanced_doctor.py
+
+echo "Pi Doctor system started!"
+echo "Web Dashboard: http://$(hostname -I | awk '{print $1}'):8010"
+echo "Ollama API: http://localhost:11434"
+START_EOF
+
+chmod +x "$BASE_DIR/start_pi_doctor.sh"
+
 echo "Setup complete. Active timers:"
-systemctl list-timers --all | grep -E "collect_health|raspi_doctor|netcheck|secscan" || echo "No timers found - check systemd unit files"
+systemctl list-timers --all | grep -E "collect_health|raspi_doctor|netcheck|secscan" || echo "No timers found"
+
+echo "Web service status:"
+sudo systemctl status pi-doctor-web.service --no-pager -l
+
+echo "Access your Pi Doctor system at: http://$(hostname -I | awk '{print $1}'):8010"
+EOF
+
+# Make the updated setup script executable
+chmod +x setup_pi_doctor_final.sh

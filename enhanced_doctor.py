@@ -1,8 +1,4 @@
 #!/usr/bin/env python3
-"""
-Enhanced Autonomous Raspberry Pi Doctor
-Monitors system health and takes autonomous corrective actions
-"""
 
 import subprocess
 import datetime
@@ -17,7 +13,7 @@ import logging
 from typing import Dict, List, Any, Optional
 
 # Configuration
-CONFIG_FILE = Path("/opt/pi-health-aiconfig.yaml")
+CONFIG_FILE = Path("./config.yaml")
 LOG_DIR = Path("/var/log/ai_health")
 HEALTH_LOG = LOG_DIR / "health.log"
 ACTIONS_LOG = LOG_DIR / "actions.log"
@@ -325,11 +321,13 @@ class AutonomousDoctor:
         
         results = []
         for service in failed_services.split('\n'):
-            if service.strip():
+            service = service.strip()
+            # Skip empty lines and invalid service names
+            if service and not any(char in service for char in ['●', '○', '•', '·']):
                 result = self.run_command(f"systemctl restart {service}")
                 results.append(f"{service}: {result}")
         
-        return "\n".join(results)
+        return "\n".join(results) if results else "No valid failed services found"
 
     def optimize_network_settings(self) -> str:
         """Optimize network settings based on current conditions"""

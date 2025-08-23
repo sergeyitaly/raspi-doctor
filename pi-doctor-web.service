@@ -1,0 +1,18 @@
+[Unit]
+Description=Pi Doctor Web Dashboard
+After=network.target enhanced_doctor.timer
+Wants=network.target
+
+[Service]
+Type=simple
+User=pi
+Group=pi
+WorkingDirectory=/home/pi/raspi-doctor
+Environment=PYTHONPATH=/home/pi/raspi-doctor
+Environment=OLLAMA_HOST=http://localhost:11434
+ExecStart=/home/pi/raspi-doctor/.venv/bin/python /home/pi/raspi-doctor/app.py
+Restart=always
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target

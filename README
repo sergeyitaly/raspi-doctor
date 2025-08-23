@@ -7,6 +7,90 @@ tar -xvzf ollama-linux-arm64.tgz
 # This should create an 'ollama' binary in the current folder
 ls -l
 
+# Move the extracted files to the correct system locations
+sudo mv bin/ollama /usr/local/bin/
+sudo mv lib/ollama /usr/local/lib/
+
+# Set proper permissions
+sudo chmod +x /usr/local/bin/ollama
+sudo chown -R root:root /usr/local/lib/ollama
+
+# Clean up the downloaded files
+rm -rf ollama-linux-arm64.tgz bin lib
+
+# Create the Ollama service
+sudo tee /etc/systemd/system/ollama.service > /dev/null << 'EOF'
+[Unit]
+Description=Ollama Service
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=exec
+ExecStart=/usr/local/bin/ollama serve
+User=root
+Group=root
+Restart=always
+RestartSec=3
+Environment="OLLAMA_HOST=0.0.0.0:11434"
+Environment="OLLAMA_MODELS=/usr/local/share/ollama/.ollama/models"
+Environment="HOME=/usr/local/share/ollama"
+WorkingDirectory=/usr/local/share/ollama
+
+# Security hardening
+NoNewPrivileges=yes
+PrivateTmp=yes
+ProtectSystem=strict
+ProtectHome=yes
+ProtectKernelTunables=yes
+ProtectKernelModules=yes
+ProtectControlGroups=yes
+
+[Install]
+WantedBy=default.target
+EOF
+
+# Create the Ollama user and directory structure
+sudo useradd -r -s /bin/false ollama
+sudo mkdir -p /usr/local/share/ollama/.ollama/models
+sudo chown -R ollama:ollama /usr/local/share/ollama
+
+# Reload systemd and start Ollama
+sudo systemctl daemon-reload
+sudo systemctl enable ollama
+sudo systemctl start ollama
+
+# Check if Ollama is running
+sudo systemctl status ollama
+
+
+# First, kill any existing Ollama processes
+pkill -f ollama
+
+# Create the necessary directories
+mkdir -p ~/.ollama/models
+
+# Start Ollama server in the background
+nohup ollama serve > ~/ollama_server.log 2>&1 &
+
+# Wait a few seconds for it to start
+sleep 5
+
+# Check if it's running
+curl -s http://localhost:11434/api/tags && echo "Ollama server is running!" || echo "Still not running - check logs"
+
+# If not running, check the logs
+if ! curl -s http://localhost:11434/api/tags > /dev/null 2>&1; then
+    echo "Checking server logs:"
+    tail -n 10 ~/ollama_server.log
+fi
+
+
+# Pull a lightweight model (choose one)
+ollama pull tinyllama  # ~600MB - good for testing
+# or
+ollama pull phi3:mini  # ~1.8GB - better quality
+
 # Move binary to /usr/local/bin and make executable
 sudo mv ollama /usr/local/bin/
 sudo chmod +x /usr/local/bin/ollama
