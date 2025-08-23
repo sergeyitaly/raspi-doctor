@@ -30,7 +30,7 @@ const elements = {
 };
 
 // Initialize charts
-let hardwareChart;
+let hardwareChart = null;
 let cpuData = [];
 let memoryData = [];
 let diskData = [];
@@ -52,84 +52,115 @@ document.addEventListener('DOMContentLoaded', function() {
     
     // Load real logs
     loadLogs();
+    
+    // Initialize Ollama status check
+    checkOllamaStatus();
+    setInterval(checkOllamaStatus, 30000);
 });
 
 function setupEventListeners() {
-
-        const testOllamaBtn = document.getElementById('test-ollama');
-        if (testOllamaBtn) {
-            testOllamaBtn.addEventListener('click', async function() {
-                this.disabled = true;
-                this.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Testing...';
-                
-                const isOnline = await checkOllamaStatus();
-                
-                this.disabled = false;
-                this.innerHTML = '<i class="fas fa-bolt"></i> Test Now';
-                
-                if (isOnline) {
-                    addOllamaAction('✅ Ollama server is online and responding', 'ollama-success');
-                } else {
-                    addOllamaAction('❌ Ollama server is offline or not responding', 'ollama-error');
-                }
-            });
-        }
-        
-
-
-    document.getElementById('ai-diagnose').onclick = function() {
-        this.disabled = true;
-        runDoctorDiagnosis();
-        setTimeout(() => this.disabled = false, 3000);
-    };
-
-    document.getElementById('refresh-ai').onclick = function() {
-        elements.ollamaActions.innerHTML = '';
-        addOllamaAction();
-    };
-
-    document.getElementById('clear-logs').onclick = function() {
-        elements.rawLogs.textContent = 'Logs cleared ' + new Date().toLocaleTimeString();
-    };
-
-    document.getElementById('refresh-logs').onclick = function() {
-        loadLogs();
-    };
-
-    elements.analyze.onclick = async () => {
-        elements.analyze.disabled = true;
-        elements.summary.innerHTML = "<div class='loading'></div> Analyzing with AI...";
-        
-        try {
-            const response = await fetch('/api/summary');
-            const data = await response.json();
+    const testOllamaBtn = document.getElementById('test-ollama');
+    if (testOllamaBtn) {
+        testOllamaBtn.addEventListener('click', async function() {
+            this.disabled = true;
+            this.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Testing...';
             
-            if (data.ok) {
-                elements.summary.textContent = data.summary;
+            const isOnline = await checkOllamaStatus();
+            
+            this.disabled = false;
+            this.innerHTML = '<i class="fas fa-bolt"></i> Test Now';
+            
+            if (isOnline) {
+                addOllamaAction('✅ Ollama server is online and responding', 'ollama-success');
             } else {
-                elements.summary.textContent = "Error: " + data.summary;
+                addOllamaAction('❌ Ollama server is offline or not responding', 'ollama-error');
             }
-        } catch (error) {
-            elements.summary.textContent = "Error connecting to server: " + error.message;
-        } finally {
-            elements.analyze.disabled = false;
-        }
-    };
+        });
+    }
+
+    const aiDiagnoseBtn = document.getElementById('ai-diagnose');
+    if (aiDiagnoseBtn) {
+        aiDiagnoseBtn.onclick = function() {
+            this.disabled = true;
+            runDoctorDiagnosis();
+            setTimeout(() => this.disabled = false, 3000);
+        };
+    }
+
+    const refreshAiBtn = document.getElementById('refresh-ai');
+    if (refreshAiBtn) {
+        refreshAiBtn.onclick = function() {
+            if (elements.ollamaActions) {
+                elements.ollamaActions.innerHTML = '';
+            }
+            addOllamaAction();
+        };
+    }
+
+    const clearLogsBtn = document.getElementById('clear-logs');
+    if (clearLogsBtn) {
+        clearLogsBtn.onclick = function() {
+            if (elements.rawLogs) {
+                elements.rawLogs.textContent = 'Logs cleared ' + new Date().toLocaleTimeString();
+            }
+        };
+    }
+
+    const refreshLogsBtn = document.getElementById('refresh-logs');
+    if (refreshLogsBtn) {
+        refreshLogsBtn.onclick = function() {
+            loadLogs();
+        };
+    }
+
+    if (elements.analyze) {
+        elements.analyze.onclick = async () => {
+            elements.analyze.disabled = true;
+            if (elements.summary) {
+                elements.summary.innerHTML = "<div class='loading'></div> Analyzing with AI...";
+            }
+            
+            try {
+                const response = await fetch('/api/summary');
+                const data = await response.json();
+                
+                if (elements.summary) {
+                    if (data.ok) {
+                        elements.summary.textContent = data.summary;
+                    } else {
+                        elements.summary.textContent = "Error: " + data.summary;
+                    }
+                }
+            } catch (error) {
+                if (elements.summary) {
+                    elements.summary.textContent = "Error connecting to server: " + error.message;
+                }
+            } finally {
+                elements.analyze.disabled = false;
+            }
+        };
+    }
 }
 
 function toggleLogs() {
     const content = document.getElementById('logs-content');
-    content.classList.toggle('expanded');
+    if (content) {
+        content.classList.toggle('expanded');
+    }
 }
 
 function loadLogs() {
     fetch('/api/hardware')
         .then(response => response.json())
         .then(data => {
-            elements.rawLogs.textContent = data.report || "No logs available";
+            if (elements.rawLogs) {
+                elements.rawLogs.textContent = data.report || "No logs available";
+            }
         })
         .catch(error => {
-            elements.rawLogs.textContent = "Error loading logs: " + error.message;
+            if (elements.rawLogs) {
+                elements.rawLogs.textContent = "Error loading logs: " + error.message;
+            }
         });
 }
 
@@ -166,12 +197,18 @@ async function loadDatabaseMetrics() {
         );
         
         // Update database metrics
-        elements.patternsCount.textContent = patternsData.count || '0';
-        elements.actionsCount.textContent = actionsData.recent_actions?.length || '0';
-        elements.metricsCount.textContent = metricsData.available_metrics?.length || '0';
+        if (elements.patternsCount) {
+            elements.patternsCount.textContent = patternsData.count || '0';
+        }
+        if (elements.actionsCount) {
+            elements.actionsCount.textContent = actionsData.recent_actions?.length || '0';
+        }
+        if (elements.metricsCount) {
+            elements.metricsCount.textContent = metricsData.available_metrics?.length || '0';
+        }
         
         // Calculate success rate
-        if (actionsData.statistics) {
+        if (actionsData.statistics && elements.successRate) {
             const totalActions = Object.values(actionsData.statistics).reduce((sum, stat) => sum + stat.total, 0);
             const successfulActions = Object.values(actionsData.statistics).reduce((sum, stat) => sum + (stat.success_rate * stat.total), 0);
             const successRate = totalActions > 0 ? (successfulActions / totalActions * 100).toFixed(1) : '0';
@@ -179,13 +216,17 @@ async function loadDatabaseMetrics() {
         }
         
         // Update status indicators
-        elements.dbStatus.textContent = 'Active';
-        elements.dbStatus.className = 'tag tag-success';
+        if (elements.dbStatus) {
+            elements.dbStatus.textContent = 'Active';
+            elements.dbStatus.className = 'tag tag-success';
+        }
         
     } catch (error) {
         console.error('Error loading database metrics:', error);
-        elements.dbStatus.textContent = 'Error';
-        elements.dbStatus.className = 'tag tag-danger';
+        if (elements.dbStatus) {
+            elements.dbStatus.textContent = 'Error';
+            elements.dbStatus.className = 'tag tag-danger';
+        }
     }
 }
 
@@ -207,28 +248,30 @@ async function updateHealthDisplay(healthData) {
     }
     
     if (cpuTemp && cpuTemp > 0) {
-        elements.headerCpu.textContent = `${cpuTemp.toFixed(1)}°C`;
-        elements.metricCpu.textContent = `${cpuTemp.toFixed(1)}°C`;
+        if (elements.headerCpu) elements.headerCpu.textContent = `${cpuTemp.toFixed(1)}°C`;
+        if (elements.metricCpu) elements.metricCpu.textContent = `${cpuTemp.toFixed(1)}°C`;
     } else {
-        elements.headerCpu.textContent = 'N/A';
-        elements.metricCpu.textContent = 'N/A';
+        if (elements.headerCpu) elements.headerCpu.textContent = 'N/A';
+        if (elements.metricCpu) elements.metricCpu.textContent = 'N/A';
     }
     
     if (healthData.memory?.percent) {
-        elements.headerMemory.textContent = `${healthData.memory.percent}%`;
-        elements.metricMemory.textContent = `${healthData.memory.percent}%`;
+        if (elements.headerMemory) elements.headerMemory.textContent = `${healthData.memory.percent}%`;
+        if (elements.metricMemory) elements.metricMemory.textContent = `${healthData.memory.percent}%`;
     }
     
-    if (healthData.disk?.percent) {
+    if (healthData.disk?.percent && elements.metricDisk) {
         elements.metricDisk.textContent = `${healthData.disk.percent}%`;
     }
     
     // Update system info
-    elements.uptime.textContent = 'Live';
-    elements.loadAvg.textContent = healthData.cpu ? `${healthData.cpu.load_1min.toFixed(2)}, ${healthData.cpu.load_5min.toFixed(2)}, ${healthData.cpu.load_15min.toFixed(2)}` : '--';
-    elements.cpuCores.textContent = healthData.cpu ? '4 cores' : '--';
-    elements.totalMemory.textContent = healthData.memory ? `${healthData.memory.total_gb}GB` : '--';
-    elements.totalDisk.textContent = healthData.disk ? `${healthData.disk.total_gb}GB` : '--';
+    if (elements.uptime) elements.uptime.textContent = 'Live';
+    if (elements.loadAvg) {
+        elements.loadAvg.textContent = healthData.cpu ? `${healthData.cpu.load_1min.toFixed(2)}, ${healthData.cpu.load_5min.toFixed(2)}, ${healthData.cpu.load_15min.toFixed(2)}` : '--';
+    }
+    if (elements.cpuCores) elements.cpuCores.textContent = healthData.cpu ? '4 cores' : '--';
+    if (elements.totalMemory) elements.totalMemory.textContent = healthData.memory ? `${healthData.memory.total_gb}GB` : '--';
+    if (elements.totalDisk) elements.totalDisk.textContent = healthData.disk ? `${healthData.disk.total_gb}GB` : '--';
     
     // Update chart data
     const now = new Date().toLocaleTimeString();
@@ -258,6 +301,8 @@ function updateTrendIndicator(metric, value) {
     if (!value) return;
     
     const trendElement = document.getElementById(`${metric}-trend`);
+    if (!trendElement) return;
+    
     const randomChange = (Math.random() * 2 - 1).toFixed(1);
     
     if (randomChange > 0.2) {
@@ -339,6 +384,9 @@ function addOllamaAction(message, className) {
         className = action.class;
     }
     
+    const actionsContainer = document.getElementById('ollama-actions');
+    if (!actionsContainer) return;
+    
     const actionElement = document.createElement('div');
     actionElement.className = 'ollama-action';
     actionElement.innerHTML = `
@@ -346,16 +394,24 @@ function addOllamaAction(message, className) {
         <div class="${className}">${message}</div>
     `;
     
-    elements.ollamaActions.prepend(actionElement);
+    actionsContainer.prepend(actionElement);
     
     // Keep only last 5 actions
-    while (elements.ollamaActions.children.length > 5) {
-        elements.ollamaActions.removeChild(elements.ollamaActions.lastChild);
+    while (actionsContainer.children.length > 5) {
+        actionsContainer.removeChild(actionsContainer.lastChild);
     }
 }
 
 function initCharts() {
-    const ctx = document.getElementById('hardwareChart').getContext('2d');
+    const canvas = document.getElementById('hardwareChart');
+    if (!canvas) return;
+    
+    // Destroy existing chart if it exists
+    if (hardwareChart) {
+        hardwareChart.destroy();
+    }
+    
+    const ctx = canvas.getContext('2d');
     hardwareChart = new Chart(ctx, {
         type: 'line',
         data: {
@@ -442,20 +498,27 @@ function updateChart() {
     }
 }
 
+async function checkOllamaStatus() {
+    const statusElement = document.getElementById('ollama-status-text');
+    const serverStatusElement = document.getElementById('ollama-server-status');
+    const modelsElement = document.getElementById('ollama-models');
+    const responseTimeElement = document.getElementById('ollama-response-time');
+    const lastCheckElement = document.getElementById('ollama-last-check');
+    const headerOllamaElement = document.getElementById('header-ollama');
+    const ollamaStatusElement = document.getElementById('ollama-status');
 
-    async function checkOllamaStatus() {
-      const statusElement = document.getElementById('ollama-status-text');
-      const serverStatusElement = document.getElementById('ollama-server-status');
-      const modelsElement = document.getElementById('ollama-models');
-      const responseTimeElement = document.getElementById('ollama-response-time');
-      const lastCheckElement = document.getElementById('ollama-last-check');
-      const headerOllamaElement = document.getElementById('header-ollama');
-      const ollamaStatusElement = document.getElementById('ollama-status');
+    // Check if elements exist before trying to update them
+    if (!statusElement || !serverStatusElement || !modelsElement || 
+        !responseTimeElement || !lastCheckElement || !headerOllamaElement || 
+        !ollamaStatusElement) {
+        console.warn('Some Ollama status elements not found');
+        return false;
+    }
 
-      try {
+    try {
         const startTime = Date.now();
         const response = await fetch('/api/ollama-status', {
-          signal: AbortSignal.timeout(5000)
+            signal: AbortSignal.timeout(5000)
         });
         const endTime = Date.now();
         const responseTime = endTime - startTime;
@@ -469,35 +532,35 @@ function updateChart() {
         lastCheckElement.textContent = new Date().toLocaleTimeString();
 
         if (data.status === 'online') {
-          statusElement.textContent = 'Online ✅';
-          statusElement.style.color = '#10b981';
-          serverStatusElement.textContent = 'Online';
-          serverStatusElement.className = 'tag tag-success';
-          headerOllamaElement.textContent = 'Online';
-          ollamaStatusElement.textContent = 'Online';
-          ollamaStatusElement.className = 'tag tag-success';
-          
-          // Show available models
-          if (data.models && data.models.length > 0) {
-            const modelNames = data.models.map(model => model.name).join(', ');
-            modelsElement.textContent = modelNames;
-          } else {
-            modelsElement.textContent = 'No models loaded';
-          }
-          
-          return true;
+            statusElement.textContent = 'Online ✅';
+            statusElement.style.color = '#10b981';
+            serverStatusElement.textContent = 'Online';
+            serverStatusElement.className = 'tag tag-success';
+            headerOllamaElement.textContent = 'Online';
+            ollamaStatusElement.textContent = 'Online';
+            ollamaStatusElement.className = 'tag tag-success';
+            
+            // Show available models
+            if (data.models && data.models.length > 0) {
+                const modelNames = data.models.map(model => model.name).join(', ');
+                modelsElement.textContent = modelNames;
+            } else {
+                modelsElement.textContent = 'No models loaded';
+            }
+            
+            return true;
         } else {
-          statusElement.textContent = `Error: ${data.message || 'Unknown error'}`;
-          statusElement.style.color = '#ef4444';
-          serverStatusElement.textContent = 'Error';
-          serverStatusElement.className = 'tag tag-danger';
-          headerOllamaElement.textContent = 'Error';
-          ollamaStatusElement.textContent = 'Error';
-          ollamaStatusElement.className = 'tag tag-danger';
-          modelsElement.textContent = 'Unknown';
-          return false;
+            statusElement.textContent = `Error: ${data.message || 'Unknown error'}`;
+            statusElement.style.color = '#ef4444';
+            serverStatusElement.textContent = 'Error';
+            serverStatusElement.className = 'tag tag-danger';
+            headerOllamaElement.textContent = 'Error';
+            ollamaStatusElement.textContent = 'Error';
+            ollamaStatusElement.className = 'tag tag-danger';
+            modelsElement.textContent = 'Unknown';
+            return false;
         }
-      } catch (error) {
+    } catch (error) {
         console.error('Ollama status check failed:', error);
         statusElement.textContent = `Offline: ${error.name === 'TimeoutError' ? 'Timeout' : error.message}`;
         statusElement.style.color = '#ef4444';
@@ -510,56 +573,22 @@ function updateChart() {
         responseTimeElement.textContent = 'Timeout';
         lastCheckElement.textContent = new Date().toLocaleTimeString();
         return false;
-      }
     }
-
-
-    // Simple ollama action function for status messages
-    function addOllamaAction(message, className) {
-      const actionsContainer = document.getElementById('ollama-actions');
-      const actionElement = document.createElement('div');
-      actionElement.className = 'ollama-action';
-      actionElement.innerHTML = `
-        <div class="timestamp">${new Date().toLocaleTimeString()}</div>
-        <div class="${className}">${message}</div>
-      `;
-      actionsContainer.prepend(actionElement);
-      
-      // Keep only last 5 actions
-      while (actionsContainer.children.length > 5) {
-        actionsContainer.removeChild(actionsContainer.lastChild);
-      }
-    }
-
-    // Initialize Ollama status check on page load
-    document.addEventListener('DOMContentLoaded', function() {
-      // Check Ollama status immediately
-      checkOllamaStatus();
-      
-      // Check every 30 seconds
-      setInterval(checkOllamaStatus, 30000);
-      
-      // Also update the main.js functionality
-      if (typeof setupEventListeners === 'function') {
-        setupEventListeners();
-      }
-      if (typeof loadInitialData === 'function') {
-        loadInitialData();
-      }
-      if (typeof initCharts === 'function') {
-        initCharts();
-      }
-    });
+}
 
 // Load network and security data
 fetch('/api/network')
     .then(response => response.json())
     .then(data => {
-        elements.network.textContent = data.summary || 'No network data available';
+        if (elements.network) {
+            elements.network.textContent = data.summary || 'No network data available';
+        }
     });
 
 fetch('/api/security')
     .then(response => response.json())
     .then(data => {
-        elements.security.textContent = data.report || 'No security data available';
+        if (elements.security) {
+            elements.security.textContent = data.report || 'No security data available';
+        }
     });
