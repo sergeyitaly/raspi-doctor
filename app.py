@@ -13,6 +13,20 @@ app = Flask(__name__)
 LOG_FILE = Path("/var/log/ai_health/health.log")
 LOG_DIR = Path("/var/log/ai_health")
 
+def init_knowledge_db():
+    try:
+        from enhanced_doctor import KnowledgeBase
+        kb = KnowledgeBase()
+        kb.ensure_tables_exist()
+        print("Knowledge database initialized successfully")
+        return True
+    except Exception as e:
+        print(f"Failed to initialize knowledge database: {e}")
+        return False
+
+init_knowledge_db()
+
+
 def read_tail(path: Path, max_bytes=120000):
     if not path.exists():
         return ""
