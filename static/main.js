@@ -167,11 +167,29 @@ async function loadDatabaseMetrics() {
     }
 }
 
-function updateHealthDisplay(healthData) {
+async function updateHealthDisplay(healthData) {
     // Update header metrics
-    if (healthData.cpu?.temperature) {
-        elements.headerCpu.textContent = `${healthData.cpu.temperature}°C`;
-        elements.metricCpu.textContent = `${healthData.cpu.temperature}°C`;
+    let cpuTemp = healthData.cpu?.temperature;
+    
+    // If temperature is 0, try to get it from the dedicated endpoint
+    if (cpuTemp === 0 || cpuTemp === undefined) {
+        try {
+            const tempResponse = await fetch('/api/temperature');
+            const tempData = await tempResponse.json();
+            if (tempData.temperature && tempData.temperature > 0) {
+                cpuTemp = tempData.temperature;
+            }
+        } catch (error) {
+            console.error('Error fetching temperature:', error);
+        }
+    }
+    
+    if (cpuTemp && cpuTemp > 0) {
+        elements.headerCpu.textContent = `${cpuTemp.toFixed(1)}°C`;
+        elements.metricCpu.textContent = `${cpuTemp.toFixed(1)}°C`;
+    } else {
+        elements.headerCpu.textContent = 'N/A';
+        elements.metricCpu.textContent = 'N/A';
     }
     
     if (healthData.memory?.percent) {
@@ -185,7 +203,7 @@ function updateHealthDisplay(healthData) {
     
     // Update system info
     elements.uptime.textContent = 'Live';
-    elements.loadAvg.textContent = healthData.cpu ? `${healthData.cpu.load_1min}, ${healthData.cpu.load_5min}, ${healthData.cpu.load_15min}` : '--';
+    elements.loadAvg.textContent = healthData.cpu ? `${healthData.cpu.load_1min.toFixed(2)}, ${healthData.cpu.load_5min.toFixed(2)}, ${healthData.cpu.load_15min.toFixed(2)}` : '--';
     elements.cpuCores.textContent = healthData.cpu ? '4 cores' : '--';
     elements.totalMemory.textContent = healthData.memory ? `${healthData.memory.total_gb}GB` : '--';
     elements.totalDisk.textContent = healthData.disk ? `${healthData.disk.total_gb}GB` : '--';
@@ -193,7 +211,7 @@ function updateHealthDisplay(healthData) {
     // Update chart data
     const now = new Date().toLocaleTimeString();
     timestamps.push(now);
-    cpuData.push(healthData.cpu?.temperature || 0);
+    cpuData.push(cpuTemp > 0 ? cpuTemp : 0);
     memoryData.push(healthData.memory?.percent || 0);
     diskData.push(healthData.disk?.percent || 0);
     

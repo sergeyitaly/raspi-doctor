@@ -868,7 +868,7 @@ class AutonomousDoctor:
         return fix_commands.get(solution_type, 'echo "No specific fix command"')
 
     def collect_health_data(self) -> Dict:
-        """Collect comprehensive system health data"""
+        """Collect comprehensive system health data with better temperature reading"""
         ts = datetime.datetime.now().isoformat()
         previous_health = self.health_data.copy() if self.health_data else {}
         
@@ -888,8 +888,8 @@ class AutonomousDoctor:
             latency = self.measure_latency()
             packet_loss = self.measure_packet_loss()
             
-            # Temperature
-            temp = self.run_command("vcgencmd measure_temp | cut -d= -f2 | cut -d\' -f1") or "N/A"
+            # Temperature - Improved reading
+            temp = self.get_cpu_temperature()
             
             # Services
             failed_services = self.run_command("systemctl --failed --no-legend | wc -l")
@@ -910,7 +910,7 @@ class AutonomousDoctor:
                     'load_1min': load_avg[0],
                     'load_5min': load_avg[1],
                     'load_15min': load_avg[2],
-                    'temperature': float(temp) if temp.replace('.', '').isdigit() else 0.0,
+                    'temperature': temp,
                     'clock_speed': clock_speed,
                     'throttling': throttling
                 },
@@ -963,6 +963,49 @@ class AutonomousDoctor:
             
         return self.health_data
 
+    def get_cpu_temperature(self):
+        """Get CPU temperature with multiple fallback methods"""
+        try:
+            # Method 1: vcgencmd (Raspberry Pi)
+            temp_output = self.run_command("vcgencmd measure_temp")
+            if temp_output and "temp" in temp_output:
+                temp_str = temp_output.split("=")[1].split("'")[0]
+                return float(temp_str)
+            
+            # Method 2: Thermal zone (Linux)
+            try:
+                with open("/sys/class/thermal/thermal_zone0/temp", "r") as f:
+                    temp_millic = float(f.read().strip())
+                    return temp_millic / 1000.0  # Convert to Celsius
+            except:
+                pass
+                
+            # Method 3: sensors command
+            sensors_output = self.run_command("sensors | grep -i temp | head -1")
+            if sensors_output:
+                import re
+                match = re.search(r'([0-9]+\.[0-9]+)°C', sensors_output)
+                if match:
+                    return float(match.group(1))
+            
+            # Method 4: Check multiple thermal zones
+            for zone in range(5):
+                try:
+                    with open(f"/sys/class/thermal/thermal_zone{zone}/temp", "r") as f:
+                        temp_millic = float(f.read().strip())
+                        temp_c = temp_millic / 1000.0
+                        if temp_c > 10:  # Reasonable temperature check
+                            return temp_c
+                except:
+                    continue
+                    
+            logger.warning("Could not read CPU temperature using any method")
+            return 0.0
+            
+        except Exception as e:
+            logger.error(f"Error reading CPU temperature: {e}")
+            return 0.0
+        
     def store_long_term_metrics(self, previous_health):
         """Store metrics for long-term trend analysis"""
         if not self.health_data:

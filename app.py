@@ -318,8 +318,16 @@ def api_system_health():
     """Comprehensive system health endpoint combining logs and database metrics"""
     try:
         # Get current health data
+        health_data = {}
         if doctor:
             health_data = doctor.collect_health_data()
+            # Fix temperature if it's 0
+            if health_data.get('cpu', {}).get('temperature') == 0:
+                # Try to get temperature from alternative source
+                temp = doctor.get_cpu_temperature()
+                if temp > 0:
+                    health_data['cpu']['temperature'] = temp
+                    logger.info(f"Fixed CPU temperature: {temp}°C")
         else:
             health_data = {"error": "Doctor not initialized"}
         
@@ -345,6 +353,107 @@ def api_system_health():
         
     except Exception as e:
         return jsonify({"error": f"Failed to get system health: {str(e)}"}), 500
+
+@app.route("/api/temperature")
+def api_temperature():
+    """Get CPU temperature with multiple fallback methods"""
+    try:
+        if not doctor:
+            return jsonify({"error": "Doctor not initialized"}), 500
+        
+        # Try multiple methods to get temperature
+        temperature = doctor.get_cpu_temperature()
+        
+        # If still 0, try direct system commands
+        if temperature == 0:
+            # Direct vcgencmd
+            try:
+                result = subprocess.run(["vcgencmd", "measure_temp"], 
+                                      capture_output=True, text=True, timeout=5)
+                if result.returncode == 0:
+                    temp_str = result.stdout.split("=")[1].split("'")[0]
+                    temperature = float(temp_str)
+            except:
+                pass
+        
+        if temperature == 0:
+            # Direct thermal zone reading
+            try:
+                with open("/sys/class/thermal/thermal_zone0/temp", "r") as f:
+                    temp_millic = float(f.read().strip())
+                    temperature = temp_millic / 1000.0
+            except:
+                pass
+        
+        return jsonify({
+            "temperature": temperature,
+            "unit": "celsius",
+            "timestamp": datetime.now().isoformat(),
+            "source": "direct_measurement"
+        })
+        
+    except Exception as e:
+        return jsonify({"error": f"Failed to get temperature: {str(e)}"}), 500
+    
+@app.route("/api/debug/temperature")
+def api_debug_temperature():
+    """Debug endpoint to test all temperature reading methods"""
+    methods = []
+    
+    # Method 1: vcgencmd
+    try:
+        result = subprocess.run(["vcgencmd", "measure_temp"], 
+                              capture_output=True, text=True, timeout=5)
+        methods.append({
+            "method": "vcgencmd",
+            "output": result.stdout,
+            "success": result.returncode == 0,
+            "temperature": float(result.stdout.split("=")[1].split("'")[0]) if result.returncode == 0 else None
+        })
+    except Exception as e:
+        methods.append({"method": "vcgencmd", "error": str(e)})
+    
+    # Method 2: Thermal zone
+    try:
+        with open("/sys/class/thermal/thermal_zone0/temp", "r") as f:
+            temp_millic = float(f.read().strip())
+            methods.append({
+                "method": "thermal_zone0",
+                "temperature": temp_millic / 1000.0,
+                "success": True
+            })
+    except Exception as e:
+        methods.append({"method": "thermal_zone0", "error": str(e)})
+    
+    # Method 3: Check all thermal zones
+    thermal_zones = []
+    for zone in range(5):
+        try:
+            with open(f"/sys/class/thermal/thermal_zone{zone}/temp", "r") as f:
+                temp_millic = float(f.read().strip())
+                thermal_zones.append({
+                    "zone": zone,
+                    "temperature": temp_millic / 1000.0,
+                    "success": True
+                })
+        except Exception as e:
+            thermal_zones.append({"zone": zone, "error": str(e)})
+    
+    methods.append({"method": "all_thermal_zones", "zones": thermal_zones})
+    
+    # Method 4: sensors command
+    try:
+        result = subprocess.run(["sensors"], 
+                              capture_output=True, text=True, timeout=5)
+        methods.append({
+            "method": "sensors",
+            "output": result.stdout,
+            "success": result.returncode == 0
+        })
+    except Exception as e:
+        methods.append({"method": "sensors", "error": str(e)})
+    
+    return jsonify({"methods": methods})
 
 # Static files route
 @app.route('/static/<path:filename>')
