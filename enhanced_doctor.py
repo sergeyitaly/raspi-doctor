@@ -646,14 +646,14 @@ class AutonomousDoctor:
         self.load_patterns()
         
     def load_config(self) -> Dict:
-        """Load configuration from YAML file"""
+        """Load configuration from YAML file with proper defaults"""
         default_config = {
             'thresholds': {
                 'cpu_temp': 75.0,
                 'memory_usage': 85.0,
                 'disk_usage': 90.0,
                 'load_15min': 3.0,
-                'failed_logins': 10,
+                'failed_logins': 10,  # Make sure this exists!
                 'packet_loss': 5.0,
                 'latency': 100.0
             },
@@ -680,12 +680,17 @@ class AutonomousDoctor:
             try:
                 with open(CONFIG_FILE, 'r') as f:
                     loaded_config = yaml.safe_load(f) or {}
+                
+                # Ensure all required threshold keys exist
+                if 'thresholds' in loaded_config:
+                    loaded_config['thresholds'] = {**default_config['thresholds'], **loaded_config['thresholds']}
+                
                 return {**default_config, **loaded_config}
             except Exception as e:
                 logger.error(f"Error loading config: {e}")
                 return default_config
         return default_config
-
+        
     def load_patterns(self):
         """Load learned patterns from file"""
         self.learned_patterns = {}
@@ -1085,15 +1090,16 @@ class AutonomousDoctor:
                 'smart_troubleshooting': True
             })
         
-        # Security - Failed Logins
+        # Security - Failed Logins (with error handling)
         failed_logins = self.health_data['security']['failed_logins']
-        if failed_logins > self.thresholds['failed_logins']:
+        failed_logins_threshold = self.thresholds.get('failed_logins', 10)  # Default to 10 if missing
+        if failed_logins > failed_logins_threshold:
             actions.append({
                 'action': 'increase_security',
                 'priority': 'high',
-                'reason': f'High failed login attempts: {failed_logins} (threshold: {self.thresholds["failed_logins"]})'
+                'reason': f'High failed login attempts: {failed_logins} (threshold: {failed_logins_threshold})'
             })
-        
+
         # Network Issues
         if self.health_data['network']['packet_loss_percent'] > self.thresholds['packet_loss']:
             actions.append({
