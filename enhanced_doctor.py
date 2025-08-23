@@ -486,7 +486,7 @@ class ServiceTroubleshooter:
                 'solution': 'investigate_logs',
                 'alternative': 'check dependencies and configuration'
             },
-                        'filesystem_recovery': {
+            'filesystem_recovery': {
                 'pattern': 'recovery required on readonly filesystem',
                 'reason': 'Filesystem was mounted read-only and required recovery',
                 'solution': 'check_disk_health',
@@ -503,9 +503,83 @@ class ServiceTroubleshooter:
                 'reason': 'EXT4 filesystem recovery performed during boot',
                 'solution': 'investigate_disk',
                 'alternative': 'check disk for errors and consider fsck'
+            },
+            'cloudflared_yaml_error': {
+                'pattern': 'error parsing YAML in config file',
+                'reason': 'Cloudflare Tunnel has invalid YAML configuration',
+                'solution': 'fix_cloudflared_config',
+                'alternative': 'Check and repair /home/pi/.cloudflared/config.yml'
+            },
+            'cloudflared_config_error': {
+                'pattern': 'mapping values are not allowed in this context',
+                'reason': 'YAML syntax error in Cloudflare config',
+                'solution': 'validate_cloudflared_config',
+                'alternative': 'Validate YAML syntax and indentation'
             }
         }
     
+
+    def analyze_cloudflared_issue(self, service_name, service_status_output, service_logs):
+        """Specialized analysis for Cloudflare Tunnel issues"""
+        recommendations = []
+        
+        # Check for YAML configuration errors
+        if 'error parsing YAML' in service_logs or 'mapping values are not allowed' in service_logs:
+            recommendation = {
+                'service': service_name,
+                'issue': 'cloudflared_yaml_error',
+                'reason': 'Invalid YAML configuration in Cloudflare Tunnel',
+                'solution': 'fix_cloudflared_config',
+                'alternative': 'Repair the config file syntax',
+                'confidence': 'high',
+                'source': 'cloudflared_specific'
+            }
+            recommendations.append(recommendation)
+        
+        return recommendations
+    
+    def execute_cloudflared_solution(self, recommendation, run_command_func):
+        """Execute Cloudflare-specific solutions"""
+        service = recommendation['service']
+        solution = recommendation['solution']
+        
+        try:
+            if solution == 'fix_cloudflared_config':
+                result = "Attempting to fix Cloudflare config YAML issue"
+                
+                # First, backup the current config
+                run_command_func("cp /home/pi/.cloudflared/config.yml /home/pi/.cloudflared/config.yml.backup")
+                
+                # Try to validate and fix the YAML
+                validation = run_command_func("python3 -c \"import yaml; yaml.safe_load(open('/home/pi/.cloudflared/config.yml'))\" 2>&1")
+                
+                if "Error" in validation or "error" in validation:
+                    # Create a simple default config
+                    default_config = """tunnel: your-tunnel-id
+credentials-file: /home/pi/.cloudflared/your-tunnel-id.json
+"""
+                    run_command_func(f"echo '{default_config}' > /home/pi/.cloudflared/config.yml.fixed")
+                    result += " - Created fixed config template"
+                
+                return f"SUCCESS: {result}"
+                
+            elif solution == 'validate_cloudflared_config':
+                result = "Validating Cloudflare config syntax"
+                validation = run_command_func("python3 -c \"import yaml; yaml.safe_load(open('/home/pi/.cloudflared/config.yml'))\" 2>&1")
+                
+                if "Error" in validation or "error" in validation:
+                    result += f" - Syntax errors found: {validation}"
+                else:
+                    result += " - Config syntax is valid"
+                
+                return f"SUCCESS: {result}"
+                
+            else:
+                return f"ERROR: Unknown Cloudflare solution: {solution}"
+                
+        except Exception as e:
+            return f"ERROR: Failed to execute Cloudflare solution: {e}"
+        
     def analyze_journal_issues(self, journal_output):
         """Analyze journal output for system-wide issues (not just services)"""
         recommendations = []
@@ -1300,10 +1374,22 @@ class AutonomousDoctor:
             if not service or service in ['', '●']:
                 continue
                 
-            # Get detailed service status
+            # Get detailed service status and logs
             service_status = self.run_command(f"systemctl status {service} --no-pager || true")
+            service_logs = self.run_command(f"journalctl -u {service} --no-pager -n 20 || true")
             
-            # Analyze the issue
+            # Special handling for Cloudflare Tunnel
+            if 'cloudflared' in service.lower():
+                print(f"Detected Cloudflare service issue: {service}")
+                recommendations = self.troubleshooter.analyze_cloudflared_issue(service, service_status, service_logs)
+                
+                if recommendations:
+                    recommendation = recommendations[0]
+                    result = self.troubleshooter.execute_cloudflared_solution(recommendation, self.run_command)
+                    results.append(f"{service}: {result} (Cloudflare-specific fix)")
+                    continue
+            
+            # Standard analysis for other services
             recommendations = self.troubleshooter.analyze_service_issue(service, service_status)
             
             if recommendations:
