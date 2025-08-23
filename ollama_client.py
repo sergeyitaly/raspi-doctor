@@ -8,7 +8,7 @@ import time
 from datetime import datetime, timedelta
 
 OLLAMA_HOST = os.getenv("OLLAMA_HOST", "http://127.0.0.1:11434")
-MODEL = os.getenv("OLLAMA_MODEL", "phi3:mini")
+MODEL = os.getenv("OLLAMA_MODEL", "tinyllama")
 KNOWLEDGE_DB = "/var/log/ai_health/knowledge.db"
 OLLAMA_TIMEOUT = int(os.getenv("OLLAMA_TIMEOUT", "120"))  # Default 120 seconds
 

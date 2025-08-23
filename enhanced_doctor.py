@@ -26,7 +26,7 @@ DECISIONS_LOG = LOG_DIR / "decisions.log"
 KNOWLEDGE_DB = LOG_DIR / "knowledge.db"
 PATTERNS_FILE = LOG_DIR / "patterns.pkl"
 OLLAMA_HOST = os.getenv("OLLAMA_HOST", "http://127.0.0.1:11434")
-MODEL = os.getenv("OLLAMA_MODEL", "phi3:mini")
+MODEL = os.getenv("OLLAMA_MODEL", "tinyllama")
 
 # Setup logging
 logging.basicConfig(
