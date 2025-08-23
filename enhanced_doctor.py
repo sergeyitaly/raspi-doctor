@@ -172,26 +172,35 @@ class KnowledgeBase:
     def store_metric(self, metric_name, metric_value, context=None):
         """Store a metric value for trend analysis"""
         if not self.ensure_tables_exist():
+            logger.error("Cannot store metric - tables not available")
             return False
             
         try:
             conn = sqlite3.connect(self.db_path)
             cursor = conn.cursor()
             
+            # Convert context to JSON string if it's a dict
+            context_str = None
+            if context is not None:
+                if isinstance(context, dict):
+                    context_str = json.dumps(context)
+                else:
+                    context_str = str(context)
+            
             cursor.execute('''
             INSERT INTO long_term_metrics (metric_name, metric_value, timestamp, context)
             VALUES (?, ?, ?, ?)
-            ''', (metric_name, metric_value, datetime.datetime.now().isoformat(), 
-                json.dumps(context) if context else None))
+            ''', (metric_name, float(metric_value), datetime.datetime.now().isoformat(), context_str))
             
             conn.commit()
             conn.close()
+            logger.debug(f"Stored metric: {metric_name}={metric_value}")
             return True
             
         except Exception as e:
-            logger.error(f"Error storing metric: {e}")
+            logger.error(f"Error storing metric {metric_name}: {e}")
             return False
-
+            
     def store_action_outcome(self, action_type, target, reason, result, success, system_state_hash, improvement=0.0):
         """Store the outcome of an action"""
         if not self.ensure_tables_exist():
@@ -663,6 +672,7 @@ class AutonomousDoctor:
         
         return results
 
+
     def collect_health_data(self) -> Dict:
         """Collect comprehensive system health data"""
         ts = datetime.datetime.now().isoformat()
@@ -762,8 +772,11 @@ class AutonomousDoctor:
     def store_long_term_metrics(self, previous_health):
         """Store metrics for long-term trend analysis"""
         if not self.health_data:
+            logger.warning("No health data available for metric storage")
             return
-            
+        
+        logger.info(f"Storing long-term metrics for timestamp: {self.health_data['timestamp']}")
+        
         # Store key metrics
         metrics_to_store = [
             ('cpu_percent', self.health_data['cpu']['percent']),
@@ -777,17 +790,22 @@ class AutonomousDoctor:
             ('failed_logins', self.health_data['security']['failed_logins'])
         ]
         
+        stored_count = 0
         for metric_name, metric_value in metrics_to_store:
-            self.knowledge_base.store_metric(metric_name, metric_value, {
-                'timestamp': self.health_data['timestamp']
-            })
+            try:
+                success = self.knowledge_base.store_metric(metric_name, metric_value, {
+                    'timestamp': self.health_data['timestamp']
+                })
+                if success:
+                    stored_count += 1
+                    logger.debug(f"Stored metric: {metric_name} = {metric_value}")
+                else:
+                    logger.warning(f"Failed to store metric: {metric_name}")
+            except Exception as e:
+                logger.error(f"Error storing metric {metric_name}: {e}")
         
-        # Calculate improvement from previous state if available
-        if previous_health and 'cpu' in previous_health:
-            improvement = self.calculate_improvement(previous_health, self.health_data)
-            if improvement != 0:
-                logger.info(f"System improvement since last check: {improvement:.2f}%")
-
+        logger.info(f"Successfully stored {stored_count}/{len(metrics_to_store)} metrics")
+        
     def calculate_improvement(self, previous, current):
         """Calculate overall system improvement percentage"""
         if not previous or not current:
@@ -1265,13 +1283,12 @@ Respond with JSON: {{"solution": "disable|stop|reinstall|investigate", "reason":
                 
         except Exception as e:
             logger.error(f"Learning system error: {e}")
-
 def main():
     """Main function"""
-    # Ensure log directory exists
-    LOG_DIR.mkdir(parents=True, exist_ok=True)
-    CONFIG_FILE.parent.mkdir(parents=True, exist_ok=True)
-    
+    # Ensure config directory exists
+    if CONFIG_FILE.parent != Path("."):
+        CONFIG_FILE.parent.mkdir(parents=True, exist_ok=True)
+
     # Create default config if it doesn't exist
     if not CONFIG_FILE.exists():
         default_config = {
@@ -1295,32 +1312,28 @@ def main():
         try:
             with open(CONFIG_FILE, 'w') as f:
                 yaml.dump(default_config, f, default_flow_style=False)
-            logger.info("Created default configuration file")
+            logger.info("Created default configuration file at %s", CONFIG_FILE)
         except Exception as e:
             logger.error(f"Failed to create config file: {e}")
-    
+
+    # Initialize knowledge base
+    kb = KnowledgeBase()
+    logger.info("Knowledge database initialized at %s", KNOWLEDGE_DB)
+
     # Run the autonomous doctor
-    doctor = AutonomousDoctor()
+    doctor = AutonomousDoctor(knowledge_base=kb)
     results = doctor.run_enhanced()
-    
+
     # Print summary
-    print(f"\n=== Enhanced Doctor Summary ===")
+    print("\n=== Enhanced Doctor Summary ===")
     print(f"Timestamp: {datetime.datetime.now().isoformat()}")
     print(f"Actions executed: {len(results)}")
     for action, result in results:
         print(f"  - {action['action']}: {action['reason']}")
-        print(f"    Result: {result[:100]}...")
-    
+        print(f"    Result: {str(result)[:100]}...")
+
     return 0
 
+
 if __name__ == "__main__":
-    # Make sure the log directory exists
-    LOG_DIR.mkdir(parents=True, exist_ok=True)
-
-    # Initialize the knowledge database
-    kb = KnowledgeBase()
-    logger.info("Knowledge database initialized at %s", KNOWLEDGE_DB)
-
-    # Pass the existing KnowledgeBase to AutonomousDoctor
-    doctor = AutonomousDoctor(knowledge_base=kb)  # Pass the existing instance
-    doctor.run_enhanced()
+    main()
