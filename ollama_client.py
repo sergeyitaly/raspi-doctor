@@ -1,5 +1,9 @@
 # ollama_client.py
-import os, requests, textwrap, pathlib, json, sqlite3
+import os
+import requests
+import textwrap
+import json
+import sqlite3
 from datetime import datetime, timedelta
 
 OLLAMA_HOST = os.getenv("OLLAMA_HOST", "http://127.0.0.1:11434")
@@ -13,7 +17,7 @@ def get_system_patterns_from_db(hours=72):
         conn = sqlite3.connect(KNOWLEDGE_DB)
         cursor = conn.cursor()
         
-        cutoff = datetime.now() - timedelta(hours=hours)
+        cutoff = (datetime.now() - timedelta(hours=hours)).isoformat()
         cursor.execute('''
         SELECT pattern_type, pattern_data, severity, confidence, solution, occurrence_count
         FROM system_patterns 
@@ -25,18 +29,17 @@ def get_system_patterns_from_db(hours=72):
         for row in cursor.fetchall():
             pattern_type, pattern_data_blob, severity, confidence, solution, count = row
             try:
-                # Assuming pattern_data is stored as pickle blob
-                import pickle
-                pattern_data = pickle.loads(pattern_data_blob)
+                # For now, just store the raw data since we can't unpickle here
                 patterns.append({
                     'type': pattern_type,
-                    'data': pattern_data,
+                    'data_size': len(pattern_data_blob) if pattern_data_blob else 0,
                     'severity': severity,
                     'confidence': confidence,
                     'solution': solution,
                     'occurrence_count': count
                 })
-            except:
+            except Exception as e:
+                print(f"Error processing pattern data: {e}")
                 continue
                 
         conn.close()
@@ -52,7 +55,7 @@ def get_recent_action_outcomes(hours=24):
         conn = sqlite3.connect(KNOWLEDGE_DB)
         cursor = conn.cursor()
         
-        cutoff = datetime.now() - timedelta(hours=hours)
+        cutoff = (datetime.now() - timedelta(hours=hours)).isoformat()
         cursor.execute('''
         SELECT action_type, target, reason, result, success, improvement
         FROM action_outcomes 
@@ -88,7 +91,7 @@ def get_metric_trends(metric_names=None, hours=72):
         conn = sqlite3.connect(KNOWLEDGE_DB)
         cursor = conn.cursor()
         
-        cutoff = datetime.now() - timedelta(hours=hours)
+        cutoff = (datetime.now() - timedelta(hours=hours)).isoformat()
         
         for metric in metric_names:
             cursor.execute('''
@@ -99,14 +102,25 @@ def get_metric_trends(metric_names=None, hours=72):
             ''', (metric, cutoff))
             
             results = cursor.fetchall()
-            if results:
+            if results and len(results) > 1:
                 values = [r[0] for r in results]
                 trends[metric] = {
                     'current': values[-1] if values else None,
                     'average': sum(values) / len(values) if values else None,
                     'min': min(values) if values else None,
                     'max': max(values) if values else None,
-                    'trend': 'increasing' if len(values) > 1 and values[-1] > values[0] else 'decreasing' if values[-1] < values[0] else 'stable'
+                    'trend': 'increasing' if values[-1] > values[0] else 'decreasing' if values[-1] < values[0] else 'stable',
+                    'data_points': len(values)
+                }
+            elif results:
+                # Only one data point
+                trends[metric] = {
+                    'current': results[0][0],
+                    'average': results[0][0],
+                    'min': results[0][0],
+                    'max': results[0][0],
+                    'trend': 'stable',
+                    'data_points': 1
                 }
                 
         conn.close()
@@ -124,7 +138,7 @@ def summarize_text(text: str, prompt: str = None, max_chars=6000):
     trends = get_metric_trends()
     
     # Truncate input text
-    text = text[-max_chars:]
+    text = text[-max_chars:] if len(text) > max_chars else text
     
     if not prompt:
         prompt = textwrap.dedent("""
@@ -182,9 +196,9 @@ def summarize_text(text: str, prompt: str = None, max_chars=6000):
                 "num_predict": 1000
             }
         }
-        r = requests.post(url, json=payload, timeout=180)
-        r.raise_for_status()
-        data = r.json()
+        response = requests.post(url, json=payload, timeout=180)
+        response.raise_for_status()
+        data = response.json()
         return data.get("response", "").strip()
     except Exception as e:
         return f"Error consulting AI: {str(e)}"
@@ -200,49 +214,38 @@ def consult_ai_for_service_issue(service_name: str, logs: str, service_status: s
         cursor.execute('''
         SELECT pattern_data, solution, success_rate, occurrence_count
         FROM system_patterns 
-        WHERE pattern_type = 'service_issue' 
-        AND pattern_hash LIKE ?
+        WHERE pattern_type LIKE '%service%' 
         ORDER BY occurrence_count DESC
         LIMIT 5
-        ''', (f'%{service_name}%',))
+        ''')
         
         for row in cursor.fetchall():
             pattern_data_blob, solution, success_rate, count = row
-            try:
-                import pickle
-                pattern_data = pickle.loads(pattern_data_blob)
-                service_patterns.append({
-                    'pattern': pattern_data,
-                    'solution': solution,
-                    'success_rate': success_rate,
-                    'occurrence_count': count
-                })
-            except:
-                continue
+            # Store basic info since we can't unpickle
+            service_patterns.append({
+                'solution': solution,
+                'success_rate': success_rate,
+                'occurrence_count': count
+            })
                 
         conn.close()
     except Exception as e:
         print(f"Error reading service patterns: {e}")
     
     prompt = textwrap.dedent(f"""
-    Analyze this service failure with historical context:
+    Analyze this service failure:
 
     Service: {service_name}
     Status: {service_status}
     Logs: {logs[:1500]}
     
-    Historical patterns for this service:
-    {json.dumps(service_patterns, indent=2, default=str)}
-    
-    Based on both current symptoms and historical patterns, recommend the best course of action.
-    Consider what has worked well in the past for similar issues.
+    Based on the symptoms, recommend the best course of action.
     
     Respond with JSON: {{
         "solution": "disable|stop|restart|reinstall|investigate|custom_command",
-        "reason": "detailed explanation referencing historical patterns",
+        "reason": "detailed explanation",
         "confidence": "high|medium|low",
-        "recommended_command": "specific command to execute",
-        "historical_success_rate": "if available from patterns"
+        "recommended_command": "specific command to execute"
     }}
     """)
     
@@ -252,19 +255,29 @@ def consult_ai_for_service_issue(service_name: str, logs: str, service_status: s
             "model": MODEL, 
             "prompt": prompt, 
             "stream": False,
-            "format": "json",
             "options": {"temperature": 0.1}
         }
-        r = requests.post(url, json=payload, timeout=120)
-        r.raise_for_status()
-        data = r.json()
-        response = data.get("response", "").strip()
+        response = requests.post(url, json=payload, timeout=120)
+        response.raise_for_status()
+        data = response.json()
+        response_text = data.get("response", "").strip()
         
-        # Parse JSON response
+        # Try to extract JSON from response
         try:
-            return json.loads(response)
+            # Look for JSON in the response
+            import re
+            json_match = re.search(r'\{.*\}', response_text, re.DOTALL)
+            if json_match:
+                return json.loads(json_match.group())
+            else:
+                # Fallback if no JSON found
+                return {
+                    "solution": "investigate",
+                    "reason": "Could not parse AI response as JSON",
+                    "confidence": "low",
+                    "recommended_command": f"journalctl -u {service_name} --no-pager -n 50"
+                }
         except json.JSONDecodeError:
-            # Fallback if JSON parsing fails
             return {
                 "solution": "investigate",
                 "reason": "AI response format error",
@@ -325,9 +338,38 @@ def analyze_system_trends():
             "stream": False,
             "options": {"temperature": 0.2}
         }
-        r = requests.post(url, json=payload, timeout=240)
-        r.raise_for_status()
-        data = r.json()
+        response = requests.post(url, json=payload, timeout=240)
+        response.raise_for_status()
+        data = response.json()
         return data.get("response", "").strip()
     except Exception as e:
         return f"Trend analysis failed: {str(e)}"
+
+# Test function
+def test_connection():
+    """Test connection to Ollama and database"""
+    try:
+        # Test Ollama connection
+        response = requests.get(f"{OLLAMA_HOST}/api/tags", timeout=10)
+        ollama_ok = response.status_code == 200
+        
+        # Test database connection
+        conn = sqlite3.connect(KNOWLEDGE_DB)
+        cursor = conn.cursor()
+        cursor.execute("SELECT name FROM sqlite_master WHERE type='table'")
+        tables = [row[0] for row in cursor.fetchall()]
+        conn.close()
+        db_ok = 'system_patterns' in tables
+        
+        return {
+            'ollama_connected': ollama_ok,
+            'database_connected': db_ok,
+            'available_tables': tables
+        }
+        
+    except Exception as e:
+        return {
+            'ollama_connected': False,
+            'database_connected': False,
+            'error': str(e)
+        }
