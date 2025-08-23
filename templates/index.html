@@ -6,7 +6,8 @@
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
-  <link rel="stylesheet" href="style.css">
+<link rel="stylesheet" href="style.css">
+
 </head>
 <body>
   <header>
@@ -14,20 +15,27 @@
       <div class="header-content">
         <div class="logo">
           <i class="fas fa-microchip logo-icon"></i>
-          <h1>Pi AI Health Dashboard <span class="muted">· local LLM via Ollama</span></h1>
+          <div>
+            <h1>Pi AI Health Dashboard</h1>
+            <div class="muted">Autonomous Raspberry Pi Monitoring · Local LLM via Ollama</div>
+          </div>
         </div>
         <div class="status-bar">
           <div class="status-item">
-            <div class="status-indicator"></div>
-            <span>System OK</span>
+            <div class="status-indicator" id="system-status"></div>
+            <span id="system-status-text">Loading...</span>
           </div>
           <div class="status-item">
-            <div class="status-indicator warning"></div>
-            <span>CPU: 62°C</span>
+            <div class="status-indicator" id="cpu-status"></div>
+            <span id="cpu-temp">--°C</span>
           </div>
           <div class="status-item">
-            <div class="status-indicator"></div>
-            <span>Network: Stable</span>
+            <div class="status-indicator" id="memory-status"></div>
+            <span id="memory-usage">--%</span>
+          </div>
+          <div class="status-item">
+            <div class="status-indicator" id="network-status"></div>
+            <span id="network-status-text">Loading...</span>
           </div>
         </div>
       </div>
@@ -35,16 +43,17 @@
   </header>
 
   <div class="container">
-    <div class="metrics-grid">
+    <!-- Real-time Metrics -->
+    <div class="metrics-grid" id="live-metrics">
       <div class="metric-card">
         <div class="metric-header">
           <div class="metric-title">CPU Temperature</div>
           <i class="fas fa-temperature-high metric-icon"></i>
         </div>
-        <div class="metric-value">62.3°C</div>
-        <div class="metric-trend trend-up">
-          <i class="fas fa-arrow-up"></i>
-          <span>2.1°C from last hour</span>
+        <div class="metric-value" id="metric-cpu">--°C</div>
+        <div class="metric-trend trend-neutral" id="cpu-trend">
+          <i class="fas fa-minus"></i>
+          <span>Loading...</span>
         </div>
       </div>
 
@@ -53,22 +62,22 @@
           <div class="metric-title">Memory Usage</div>
           <i class="fas fa-memory metric-icon"></i>
         </div>
-        <div class="metric-value">78%</div>
-        <div class="metric-trend trend-up">
-          <i class="fas fa-arrow-up"></i>
-          <span>5% from last hour</span>
+        <div class="metric-value" id="metric-memory">--%</div>
+        <div class="metric-trend trend-neutral" id="memory-trend">
+          <i class="fas fa-minus"></i>
+          <span>Loading...</span>
         </div>
       </div>
 
       <div class="metric-card">
         <div class="metric-header">
-          <div class="metric-title">Network Uptime</div>
-          <i class="fas fa-wifi metric-icon"></i>
+          <div class="metric-title">Disk Usage</div>
+          <i class="fas fa-hard-drive metric-icon"></i>
         </div>
-        <div class="metric-value">99.8%</div>
-        <div class="metric-trend trend-down">
-          <i class="fas fa-arrow-down"></i>
-          <span>0.1% from yesterday</span>
+        <div class="metric-value" id="metric-disk">--%</div>
+        <div class="metric-trend trend-neutral" id="disk-trend">
+          <i class="fas fa-minus"></i>
+          <span>Loading...</span>
         </div>
       </div>
 
@@ -77,96 +86,124 @@
           <div class="metric-title">AI Model Status</div>
           <i class="fas fa-brain metric-icon"></i>
         </div>
-        <div class="metric-value">Active</div>
-        <div class="metric-trend">
-          <span class="tag tag-success">Ollama Ready</span>
+        <div class="metric-value" id="metric-ai">--</div>
+        <div class="metric-trend" id="ai-status">
+          <span class="tag tag-info">Checking...</span>
         </div>
       </div>
     </div>
 
-    <div class="grid">
+    <!-- Main Dashboard Grid -->
+    <div class="dashboard-grid">
+      <!-- System Health Card -->
       <div class="card">
         <div class="card-header">
-          <h2><i class="fas fa-terminal card-icon"></i> Latest Raw Logs</h2>
-          <span class="tag tag-success">Live</span>
+          <h2><i class="fas fa-heart-pulse card-icon"></i> System Health</h2>
+          <span class="tag tag-success" id="overall-health">Good</span>
         </div>
         <div class="card-content">
-          <div class="preformatted" id="raw">{{ latest }}</div>
+          <div class="grid-2">
+            <div>
+              <h3 style="font-size: 0.9rem; margin-bottom: 0.5rem; color: var(--text-secondary);">Current Status</h3>
+              <div class="compact-list">
+                <li><span class="stat-label">Uptime:</span> <span class="stat-value" id="uptime">--</span></li>
+                <li><span class="stat-label">Load Average:</span> <span class="stat-value" id="load-avg">--</span></li>
+                <li><span class="stat-label">Processes:</span> <span class="stat-value" id="process-count">--</span></li>
+                <li><span class="stat-label">Failed Services:</span> <span class="stat-value" id="failed-services">0</span></li>
+              </div>
+            </div>
+            <div>
+              <h3 style="font-size: 0.9rem; margin-bottom: 0.5rem; color: var(--text-secondary);">Resources</h3>
+              <div class="compact-list">
+                <li><span class="stat-label">CPU Cores:</span> <span class="stat-value" id="cpu-cores">--</span></li>
+                <li><span class="stat-label">Total Memory:</span> <span class="stat-value" id="total-memory">--</span></li>
+                <li><span class="stat-label">Total Disk:</span> <span class="stat-value" id="total-disk">--</span></li>
+                <li><span class="stat-label">Swap Usage:</span> <span class="stat-value" id="swap-usage">--%</span></li>
+              </div>
+            </div>
+          </div>
+        </div>
+        <div class="actions">
+          <button id="refresh-system">
+            <i class="fas fa-sync-alt"></i>
+            Refresh
+          </button>
         </div>
       </div>
 
+      <!-- AI Analysis Card -->
       <div class="card">
         <div class="card-header">
-          <h2><i class="fas fa-robot card-icon"></i> AI Summary</h2>
-          <span class="tag tag-warning">Analysis Needed</span>
+          <h2><i class="fas fa-robot card-icon"></i> AI Analysis</h2>
+          <span class="tag tag-warning" id="ai-analysis-status">Ready</span>
         </div>
         <div class="card-content">
-          <div class="summary" id="summary">Click "Analyze with AI" to generate a health report.</div>
+          <div class="summary" id="summary">Click "Analyze with AI" to generate a health report. The AI will analyze system logs and provide recommendations.</div>
         </div>
         <div class="actions">
           <button id="analyze">
             <i class="fas fa-brain"></i>
             Analyze with AI
           </button>
-          <button id="refresh" class="secondary">
+          <button id="refresh-logs" class="secondary">
             <i class="fas fa-sync-alt"></i>
-            Refresh Logs
           </button>
         </div>
       </div>
-    </div>
 
-    <h2 class="section-title">Network & Security</h2>
-    
-    <div class="grid">
+      <!-- Network Status Card -->
       <div class="card">
         <div class="card-header">
-          <h2><i class="fas fa-network-wired card-icon"></i> Network Stability</h2>
+          <h2><i class="fas fa-network-wired card-icon"></i> Network Status</h2>
+          <span class="tag tag-success" id="network-tag">Stable</span>
         </div>
         <div class="card-content">
           <div class="preformatted" id="network">Loading network data...</div>
         </div>
         <div class="actions">
-          <button id="refreshNetwork" class="secondary">
+          <button id="refresh-network" class="secondary">
             <i class="fas fa-sync-alt"></i>
-            Refresh
           </button>
         </div>
       </div>
 
+      <!-- Security Status Card -->
       <div class="card">
         <div class="card-header">
           <h2><i class="fas fa-shield-alt card-icon"></i> Security</h2>
+          <span class="tag tag-success" id="security-tag">Secure</span>
         </div>
         <div class="card-content">
           <div class="preformatted" id="security">Loading security report...</div>
         </div>
         <div class="actions">
-          <button id="refreshSecurity" class="secondary">
+          <button id="refresh-security" class="secondary">
             <i class="fas fa-sync-alt"></i>
-            Refresh
           </button>
         </div>
       </div>
-    </div>
 
-    <h2 class="section-title">System Analytics</h2>
-    
-    <div class="card">
-      <div class="card-header">
-        <h2><i class="fas fa-chart-line card-icon"></i> Network Status Timeline</h2>
-      </div>
-      <div class="card-content">
-        <div class="chart-container">
-          <canvas id="networkChart"></canvas>
-        </div>
-      </div>
-    </div>
-
-    <div class="grid">
+      <!-- Recent Actions Card -->
       <div class="card">
         <div class="card-header">
-          <h2><i class="fas fa-microchip card-icon"></i> CPU & Memory Usage</h2>
+          <h2><i class="fas fa-list-check card-icon"></i> Recent Actions</h2>
+          <span class="tag tag-info" id="actions-count">0</span>
+        </div>
+        <div class="card-content">
+          <div class="preformatted" id="actions">Loading action history...</div>
+        </div>
+        <div class="actions">
+          <button id="refresh-actions" class="secondary">
+            <i class="fas fa-sync-alt"></i>
+          </button>
+        </div>
+      </div>
+
+      <!-- Hardware Monitoring Card -->
+      <div class="card">
+        <div class="card-header">
+          <h2><i class="fas fa-gauge-high card-icon"></i> Hardware Monitor</h2>
+          <span class="tag tag-success">Live</span>
         </div>
         <div class="card-content">
           <div class="chart-container">
@@ -174,28 +211,23 @@
           </div>
         </div>
       </div>
-
-      <div class="card">
-        <div class="card-header">
-          <h2><i class="fas fa-list-ul card-icon"></i> AI Doctor Actions Timeline</h2>
-        </div>
-        <div class="card-content">
-          <div class="chart-container">
-            <canvas id="actionsChart"></canvas>
-          </div>
-        </div>
-      </div>
     </div>
 
+    <!-- System Logs Card (Full Width) -->
     <div class="card">
       <div class="card-header">
-        <h2><i class="fas fa-tasks card-icon"></i> Doctor Actions</h2>
+        <h2><i class="fas fa-terminal card-icon"></i> System Logs</h2>
+        <span class="tag tag-info">Live Feed</span>
       </div>
       <div class="card-content">
-        <div class="preformatted" id="actions">Loading action history...</div>
+        <div class="preformatted" id="raw-logs">{{ latest }}</div>
       </div>
       <div class="actions">
-        <button id="refreshActions" class="secondary">
+        <button id="clear-logs" class="secondary">
+          <i class="fas fa-trash"></i>
+          Clear
+        </button>
+        <button id="refresh-logs-full" class="secondary">
           <i class="fas fa-sync-alt"></i>
           Refresh
         </button>
@@ -204,207 +236,306 @@
   </div>
 
   <script>
-    const summarizeBtn = document.getElementById('analyze');
-    const refreshBtn = document.getElementById('refresh');
-    const summaryEl = document.getElementById('summary');
-    const actionsEl = document.getElementById('actions');
-    const refreshActions = document.getElementById('refreshActions');
-    const security = document.getElementById('security');
-    const refreshSecurity = document.getElementById('refreshSecurity');
-    const network = document.getElementById('network');
-    const refreshNetwork = document.getElementById('refreshNetwork');
+    // DOM Elements
+    const elements = {
+      analyze: document.getElementById('analyze'),
+      summary: document.getElementById('summary'),
+      actions: document.getElementById('actions'),
+      security: document.getElementById('security'),
+      network: document.getElementById('network'),
+      rawLogs: document.getElementById('raw-logs'),
+      
+      // Status elements
+      systemStatus: document.getElementById('system-status'),
+      systemStatusText: document.getElementById('system-status-text'),
+      cpuStatus: document.getElementById('cpu-status'),
+      cpuTemp: document.getElementById('cpu-temp'),
+      memoryStatus: document.getElementById('memory-status'),
+      memoryUsage: document.getElementById('memory-usage'),
+      networkStatus: document.getElementById('network-status'),
+      networkStatusText: document.getElementById('network-status-text'),
+      
+      // Metric elements
+      metricCpu: document.getElementById('metric-cpu'),
+      metricMemory: document.getElementById('metric-memory'),
+      metricDisk: document.getElementById('metric-disk'),
+      metricAi: document.getElementById('metric-ai'),
+      
+      // Trend elements
+      cpuTrend: document.getElementById('cpu-trend'),
+      memoryTrend: document.getElementById('memory-trend'),
+      diskTrend: document.getElementById('disk-trend'),
+      aiStatus: document.getElementById('ai-status'),
+      
+      // System info elements
+      uptime: document.getElementById('uptime'),
+      loadAvg: document.getElementById('load-avg'),
+      processCount: document.getElementById('process-count'),
+      failedServices: document.getElementById('failed-services'),
+      cpuCores: document.getElementById('cpu-cores'),
+      totalMemory: document.getElementById('total-memory'),
+      totalDisk: document.getElementById('total-disk'),
+      swapUsage: document.getElementById('swap-usage'),
+      overallHealth: document.getElementById('overall-health'),
+      actionsCount: document.getElementById('actions-count'),
+      networkTag: document.getElementById('network-tag'),
+      securityTag: document.getElementById('security-tag'),
+      aiAnalysisStatus: document.getElementById('ai-analysis-status')
+    };
 
-    // Simulate initial data loading
+    // Button event listeners
+    document.getElementById('refresh-system').onclick = loadSystemInfo;
+    document.getElementById('refresh-logs').onclick = loadLogs;
+    document.getElementById('refresh-network').onclick = loadNetwork;
+    document.getElementById('refresh-security').onclick = loadSecurity;
+    document.getElementById('refresh-actions').onclick = loadActions;
+    document.getElementById('refresh-logs-full').onclick = loadLogs;
+    document.getElementById('clear-logs').onclick = clearLogs;
+
+    // Initialize charts
+    let hardwareChart;
+    let networkChart;
+
+    // Load initial data
     document.addEventListener('DOMContentLoaded', function() {
-      security.textContent = "✓ No security vulnerabilities detected\n✓ Firewall is active\n✓ SSH access secured\n✓ Regular security updates enabled";
-      network.textContent = "✓ Network stability: Excellent\n✓ Uptime: 99.8%\n✓ Latency: 12ms avg\n✓ Packet loss: 0.1%";
-      actionsEl.textContent = "2023-06-15 14:32: Applied security update\n2023-06-15 13:45: Optimized memory usage\n2023-06-15 12:30: Cleared temporary files\n2023-06-15 11:15: Monitored network traffic";
+      loadAllData();
+      initCharts();
+      setInterval(loadAllData, 30000); // Refresh every 30 seconds
     });
 
-    async function loadActions(){
-      const r = await fetch('/api/actions');
-      const j = await r.json();
-      actionsEl.textContent = j.log || "No actions yet.";
+    async function loadAllData() {
+      await Promise.all([
+        loadSystemInfo(),
+        loadLogs(),
+        loadNetwork(),
+        loadSecurity(),
+        loadActions(),
+        checkOllamaStatus()
+      ]);
     }
-    refreshActions.onclick = loadActions;
 
-    async function loadSecurity(){
-      const r = await fetch('/api/security');
-      const j = await r.json();
-      security.textContent = j.report || "No security events.";
+    async function loadSystemInfo() {
+      try {
+        const response = await fetch('/api/v2/hardware');
+        const data = await response.json();
+        
+        if (data && data.length > 0) {
+          const latest = data[data.length - 1];
+          updateSystemMetrics(latest);
+        }
+      } catch (error) {
+        console.error('Error loading system info:', error);
+      }
     }
-    refreshSecurity.onclick = loadSecurity;
 
-    async function loadNetwork(){
-      const r = await fetch('/api/network');
-      const j = await r.json();
-      network.textContent = j.summary || "No data yet.";
+    function updateSystemMetrics(data) {
+      // Update metrics
+      elements.metricCpu.textContent = `${data.cpu}°C`;
+      elements.metricMemory.textContent = `${Math.round(data.mem)}%`;
+      elements.cpuTemp.textContent = `${data.cpu}°C`;
+      elements.memoryUsage.textContent = `${Math.round(data.mem)}%`;
+      
+      // Update status indicators
+      updateStatusIndicator(elements.cpuStatus, data.cpu, 70, 80);
+      updateStatusIndicator(elements.memoryStatus, data.mem, 80, 90);
+      
+      // Update system status
+      const systemHealthy = data.cpu < 80 && data.mem < 90;
+      elements.systemStatus.style.background = systemHealthy ? '#10b981' : '#ef4444';
+      elements.systemStatusText.textContent = systemHealthy ? 'System OK' : 'System Issue';
+      elements.overallHealth.textContent = systemHealthy ? 'Good' : 'Attention Needed';
+      elements.overallHealth.className = systemHealthy ? 'tag tag-success' : 'tag tag-danger';
     }
-    refreshNetwork.onclick = loadNetwork;
 
-    summarizeBtn.onclick = async () => {
-      summarizeBtn.disabled = true;
-      summaryEl.innerHTML = "<div class='loading'></div> Analyzing with local model...";
+    function updateStatusIndicator(element, value, warnThreshold, dangerThreshold) {
+      if (value >= dangerThreshold) {
+        element.style.background = '#ef4444';
+      } else if (value >= warnThreshold) {
+        element.style.background = '#f59e0b';
+      } else {
+        element.style.background = '#10b981';
+      }
+    }
+
+    async function loadLogs() {
+      try {
+        const response = await fetch('/api/summary');
+        const data = await response.json();
+        if (data.ok) {
+          elements.rawLogs.textContent = data.summary;
+        }
+      } catch (error) {
+        console.error('Error loading logs:', error);
+      }
+    }
+
+    async function loadNetwork() {
+      try {
+        const response = await fetch('/api/v2/network');
+        const data = await response.json();
+        if (data && data.length > 0) {
+          const networkStatus = data.slice(-10).map(item => 
+            `${item.time.split('T')[1].split('.')[0]} - ${item.status}`
+          ).join('\n');
+          elements.network.textContent = networkStatus;
+          
+          // Update network status
+          const lastStatus = data[data.length - 1].status;
+          const isNetworkStable = !lastStatus.includes('FAIL');
+          elements.networkStatus.style.background = isNetworkStable ? '#10b981' : '#ef4444';
+          elements.networkStatusText.textContent = isNetworkStable ? 'Network OK' : 'Network Issue';
+          elements.networkTag.textContent = isNetworkStable ? 'Stable' : 'Unstable';
+          elements.networkTag.className = isNetworkStable ? 'tag tag-success' : 'tag tag-danger';
+        }
+      } catch (error) {
+        console.error('Error loading network:', error);
+      }
+    }
+
+    async function loadSecurity() {
+      try {
+        const response = await fetch('/api/security');
+        const data = await response.json();
+        elements.security.textContent = data.report || "No security events detected.";
+        elements.securityTag.textContent = "Secure";
+      } catch (error) {
+        console.error('Error loading security:', error);
+      }
+    }
+
+    async function loadActions() {
+      try {
+        const response = await fetch('/api/v2/actions');
+        const data = await response.json();
+        if (data && data.length > 0) {
+          const actions = data.slice(-8).map(item => 
+            `${item.time} - ${item.action}`
+          ).join('\n');
+          elements.actions.textContent = actions;
+          elements.actionsCount.textContent = data.length;
+        }
+      } catch (error) {
+        console.error('Error loading actions:', error);
+      }
+    }
+
+    async function checkOllamaStatus() {
+      try {
+        const response = await fetch('http://localhost:11434/api/tags');
+        if (response.ok) {
+          elements.metricAi.textContent = 'Online';
+          elements.aiStatus.innerHTML = '<span class="tag tag-success">Ollama Ready</span>';
+          elements.aiAnalysisStatus.textContent = 'Ready';
+          elements.aiAnalysisStatus.className = 'tag tag-success';
+        }
+      } catch (error) {
+        elements.metricAi.textContent = 'Offline';
+        elements.aiStatus.innerHTML = '<span class="tag tag-danger">Ollama Offline</span>';
+        elements.aiAnalysisStatus.textContent = 'Offline';
+        elements.aiAnalysisStatus.className = 'tag tag-danger';
+      }
+    }
+
+    elements.analyze.onclick = async () => {
+      elements.analyze.disabled = true;
+      elements.summary.innerHTML = "<div class='loading'></div> Analyzing with local AI model...";
       
       try {
-        const r = await fetch('/api/summary');
-        const j = await r.json();
-        if (j.ok) {
-          summaryEl.textContent = j.summary;
+        const response = await fetch('/api/summary');
+        const data = await response.json();
+        if (data.ok) {
+          elements.summary.textContent = data.summary;
         } else {
-          summaryEl.textContent = "Error: " + j.summary;
+          elements.summary.textContent = "Error: " + data.summary;
         }
-      } catch (e) {
-        summaryEl.textContent = "Request failed: " + e;
+      } catch (error) {
+        elements.summary.textContent = "Request failed: " + error;
       } finally {
-        summarizeBtn.disabled = false;
+        elements.analyze.disabled = false;
       }
     };
 
-    async function fetchData(url) {
-        const res = await fetch(url);
-        return await res.json();
+    function clearLogs() {
+      elements.rawLogs.textContent = '';
     }
 
-    async function initCharts() {
-        // Sample data for demonstration
-        const times = ['14:00', '14:05', '14:10', '14:15', '14:20', '14:25', '14:30'];
-        
-        // Network Chart
-        const networkCtx = document.getElementById('networkChart').getContext('2d');
-        const networkChart = new Chart(networkCtx, {
-            type: 'line',
-            data: {
-                labels: times,
-                datasets: [{
-                    label: 'Network Latency (ms)',
-                    data: [12, 14, 18, 15, 22, 16, 13],
-                    borderColor: '#3b82f6',
-                    backgroundColor: 'rgba(59, 130, 246, 0.1)',
-                    fill: true,
-                    tension: 0.4
-                }]
+    function initCharts() {
+      // Hardware Chart
+      const hardwareCtx = document.getElementById('hardwareChart').getContext('2d');
+      hardwareChart = new Chart(hardwareCtx, {
+        type: 'line',
+        data: {
+          labels: Array.from({length: 10}, (_, i) => `${i * 5}m`),
+          datasets: [
+            {
+              label: 'CPU Temp (°C)',
+              data: [],
+              borderColor: '#f59e0b',
+              backgroundColor: 'rgba(245, 158, 11, 0.1)',
+              fill: true,
+              tension: 0.4,
+              borderWidth: 2
             },
-            options: {
-                responsive: true,
-                maintainAspectRatio: false,
-                plugins: {
-                    legend: {
-                        labels: { color: '#94a3b8' }
-                    }
-                },
-                scales: {
-                    y: {
-                        beginAtZero: true,
-                        grid: { color: 'rgba(255, 255, 255, 0.05)' },
-                        ticks: { color: '#94a3b8' }
-                    },
-                    x: {
-                        grid: { color: 'rgba(255, 255, 255, 0.05)' },
-                        ticks: { color: '#94a3b8' }
-                    }
-                }
+            {
+              label: 'Memory (%)',
+              data: [],
+              borderColor: '#6366f1',
+              backgroundColor: 'rgba(99, 102, 241, 0.1)',
+              fill: true,
+              tension: 0.4,
+              borderWidth: 2
             }
-        });
+          ]
+        },
+        options: {
+          responsive: true,
+          maintainAspectRatio: false,
+          plugins: {
+            legend: {
+              labels: { 
+                color: '#94a3b8',
+                font: { size: 10 }
+              }
+            }
+          },
+          scales: {
+            y: {
+              beginAtZero: true,
+              grid: { color: 'rgba(255, 255, 255, 0.05)' },
+              ticks: { 
+                color: '#94a3b8',
+                font: { size: 9 }
+              }
+            },
+            x: {
+              grid: { color: 'rgba(255, 255, 255, 0.05)' },
+              ticks: { 
+                color: '#94a3b8',
+                font: { size: 9 }
+              }
+            }
+          }
+        }
+      });
 
-        // Hardware Chart
-        const hardwareCtx = document.getElementById('hardwareChart').getContext('2d');
-        const hardwareChart = new Chart(hardwareCtx, {
-            type: 'line',
-            data: {
-                labels: times,
-                datasets: [
-                    {
-                        label: 'CPU Temp (°C)',
-                        data: [58, 60, 62, 59, 61, 63, 62],
-                        borderColor: '#f59e0b',
-                        backgroundColor: 'rgba(245, 158, 11, 0.1)',
-                        fill: true,
-                        tension: 0.4,
-                        yAxisID: 'y'
-                    },
-                    {
-                        label: 'Memory Used (%)',
-                        data: [72, 75, 78, 76, 74, 77, 78],
-                        borderColor: '#6366f1',
-                        backgroundColor: 'rgba(99, 102, 241, 0.1)',
-                        fill: true,
-                        tension: 0.4,
-                        yAxisID: 'y1'
-                    }
-                ]
-            },
-            options: {
-                responsive: true,
-                maintainAspectRatio: false,
-                plugins: {
-                    legend: {
-                        labels: { color: '#94a3b8' }
-                    }
-                },
-                scales: {
-                    y: {
-                        type: 'linear',
-                        display: true,
-                        position: 'left',
-                        title: { display: true, text: 'Temperature (°C)', color: '#94a3b8' },
-                        grid: { color: 'rgba(255, 255, 255, 0.05)' },
-                        ticks: { color: '#94a3b8' }
-                    },
-                    y1: {
-                        type: 'linear',
-                        display: true,
-                        position: 'right',
-                        title: { display: true, text: 'Memory (%)', color: '#94a3b8' },
-                        grid: { drawOnChartArea: false },
-                        ticks: { color: '#94a3b8' },
-                        max: 100
-                    },
-                    x: {
-                        grid: { color: 'rgba(255, 255, 255, 0.05)' },
-                        ticks: { color: '#94a3b8' }
-                    }
-                }
-            }
-        });
-
-        // Actions Chart
-        const actionsCtx = document.getElementById('actionsChart').getContext('2d');
-        const actionsChart = new Chart(actionsCtx, {
-            type: 'bar',
-            data: {
-                labels: ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'],
-                datasets: [{
-                    label: 'AI Actions Taken',
-                    data: [3, 5, 2, 4, 6, 3, 2],
-                    backgroundColor: '#10b981'
-                }]
-            },
-            options: {
-                responsive: true,
-                maintainAspectRatio: false,
-                plugins: {
-                    legend: {
-                        labels: { color: '#94a3b8' }
-                    }
-                },
-                scales: {
-                    y: {
-                        beginAtZero: true,
-                        grid: { color: 'rgba(255, 255, 255, 0.05)' },
-                        ticks: { color: '#94a3b8' }
-                    },
-                    x: {
-                        grid: { color: 'rgba(255, 255, 255, 0.05)' },
-                        ticks: { color: '#94a3b8' }
-                    }
-                }
-            }
-        });
+      // Simulate chart data updates
+      setInterval(() => {
+        if (hardwareChart) {
+          const newCpuValue = Math.random() * 20 + 50; // 50-70°C
+          const newMemValue = Math.random() * 20 + 60; // 60-80%
+          
+          hardwareChart.data.datasets[0].data.push(newCpuValue);
+          hardwareChart.data.datasets[1].data.push(newMemValue);
+          
+          if (hardwareChart.data.datasets[0].data.length > 10) {
+            hardwareChart.data.datasets[0].data.shift();
+            hardwareChart.data.datasets[1].data.shift();
+          }
+          
+          hardwareChart.update('none');
+        }
+      }, 5000);
     }
-
-    initCharts();
-    refreshBtn.onclick = () => window.location.reload();
   </script>
 </body>
 </html>

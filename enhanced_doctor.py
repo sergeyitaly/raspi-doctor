@@ -1,5 +1,4 @@
-#!/usr/bin/env python3
-
+#!/home/pi/raspi-doctor/.venv/bin/python3
 import subprocess
 import datetime
 import os
@@ -32,12 +31,115 @@ logging.basicConfig(
 )
 logger = logging.getLogger("enhanced_doctor")
 
+class ServiceTroubleshooter:
+    def __init__(self):
+        self.problematic_patterns = {
+            'rng-tools': {
+                'pattern': 'rng-tools',
+                'reason': 'Hardware RNG not available on Raspberry Pi',
+                'solution': 'disable_service',
+                'alternative': 'install haveged for software entropy'
+            },
+            'avahi-daemon': {
+                'pattern': 'avahi-daemon',
+                'reason': 'Often conflicts on Raspberry Pi',
+                'solution': 'stop_service',
+                'alternative': 'keep disabled if not needed for networking'
+            },
+            'bluetooth': {
+                'pattern': 'bluetooth',
+                'reason': 'High resource usage, often unnecessary',
+                'solution': 'stop_service',
+                'alternative': 'enable only when needed'
+            },
+            'failed-to-start': {
+                'pattern': 'Failed to start',
+                'reason': 'Service startup failure',
+                'solution': 'investigate_logs',
+                'alternative': 'check dependencies and configuration'
+            }
+        }
+    
+    def analyze_service_issue(self, service_name, service_status_output):
+        """Analyze service issues and recommend solutions"""
+        recommendations = []
+        
+        for issue_name, issue_data in self.problematic_patterns.items():
+            if issue_data['pattern'].lower() in service_name.lower() or \
+               issue_data['pattern'].lower() in service_status_output.lower():
+                
+                recommendation = {
+                    'service': service_name,
+                    'issue': issue_name,
+                    'reason': issue_data['reason'],
+                    'solution': issue_data['solution'],
+                    'alternative': issue_data['alternative'],
+                    'confidence': 'high' if issue_data['pattern'].lower() in service_name.lower() else 'medium'
+                }
+                recommendations.append(recommendation)
+        
+        return recommendations
+    
+    def execute_solution(self, recommendation, run_command_func):
+        """Execute the recommended solution"""
+        service = recommendation['service']
+        solution = recommendation['solution']
+        
+        try:
+            if solution == 'disable_service':
+                result = f"Disabling problematic service {service}"
+                run_command_func(f"sudo systemctl disable {service} --now")
+                run_command_func(f"sudo systemctl mask {service}")
+                
+            elif solution == 'stop_service':
+                result = f"Stopping non-essential service {service}"
+                run_command_func(f"sudo systemctl stop {service}")
+                
+            elif solution == 'investigate_logs':
+                result = f"Investigating {service} logs"
+                logs = run_command_func(f"sudo journalctl -u {service} --no-pager -n 20")
+                # Could add AI analysis here
+                
+            elif solution == 'reinstall_service':
+                result = f"Reinstalling {service}"
+                pkg_name = service.replace('.service', '')
+                run_command_func(f"sudo apt install --reinstall {pkg_name}")
+                
+            else:
+                result = f"No action taken for {service}"
+                
+            return f"SUCCESS: {result}"
+            
+        except Exception as e:
+            return f"ERROR: Failed to execute solution for {service}: {e}"
+
 class AutonomousDoctor:
     def __init__(self):
         self.config = self.load_config()
         self.thresholds = self.config.get('thresholds', {})
         self.actions_enabled = self.config.get('actions', {})
         self.health_data = {}
+        self.troubleshooter = ServiceTroubleshooter()
+        self.raspberry_specific_issues = {
+            'rng-tools': {
+                'detection': ['rng-tools', 'hardware RNG', 'no entropy source'],
+                'solution': 'disable_service',
+                'message': 'Raspberry Pi lacks hardware RNG, install haveged instead',
+                'command': 'sudo apt install haveged && sudo systemctl disable rng-tools-debian --now'
+            },
+            'memory_issues': {
+                'detection': ['oom', 'out of memory', 'killed process'],
+                'solution': 'adjust_swappiness',
+                'message': 'High memory pressure, adjusting swappiness',
+                'command': 'echo "vm.swappiness=10" | sudo tee -a /etc/sysctl.conf && sudo sysctl -p'
+            },
+            'temperature': {
+                'detection': ['thermal', 'throttling', 'temperature'],
+                'solution': 'reduce_load',
+                'message': 'CPU throttling due to temperature, reducing load',
+                'command': 'echo powersave | sudo tee /sys/devices/system/cpu/cpu*/cpufreq/scaling_governor'
+            }
+        }
         
     def load_config(self) -> Dict:
         """Load configuration from YAML file"""
@@ -83,6 +185,39 @@ class AutonomousDoctor:
             return "ERROR: Command timed out"
         except Exception as e:
             return f"ERROR: {str(e)}"
+
+    def detect_raspberry_specific_issues(self):
+        """Detect and handle Raspberry Pi specific issues"""
+        issues_found = []
+        
+        # Check journal for known issues
+        journal_logs = self.run_command("journalctl --since '1 hour ago' --no-pager | tail -100")
+        
+        for issue_name, issue_data in self.raspberry_specific_issues.items():
+            for pattern in issue_data['detection']:
+                if pattern.lower() in journal_logs.lower():
+                    issues_found.append({
+                        'issue': issue_name,
+                        'solution': issue_data['solution'],
+                        'message': issue_data['message'],
+                        'command': issue_data['command']
+                    })
+                    break
+        
+        return issues_found
+
+    def execute_autonomous_fixes(self, detected_issues):
+        """Execute fixes for detected issues"""
+        results = []
+        
+        for issue in detected_issues:
+            try:
+                result = self.run_command(issue['command'])
+                results.append(f"{issue['issue']}: {result}")
+            except Exception as e:
+                results.append(f"{issue['issue']}: ERROR - {e}")
+        
+        return results
 
     def collect_health_data(self) -> Dict:
         """Collect comprehensive system health data"""
@@ -257,10 +392,13 @@ class AutonomousDoctor:
         # Failed Services
         failed_services = self.health_data['services']['failed_count']
         if failed_services > 0:
+            # Get the actual failed services for smart analysis
+            failed_list = self.run_command("systemctl --failed --no-legend | awk '{print $1}' | tr '\n' ','")
             actions.append({
                 'action': 'restart_failed_services',
                 'priority': 'medium',
-                'reason': f'{failed_services} failed services detected'
+                'reason': f'{failed_services} failed services detected: {failed_list}',
+                'smart_troubleshooting': True
             })
         
         # Security - Failed Logins
@@ -303,7 +441,10 @@ class AutonomousDoctor:
         
         if action_type in action_handlers and self.actions_enabled.get(f'auto_{action_type}', True):
             try:
-                result = action_handlers[action_type]()
+                if action.get('smart_troubleshooting', False):
+                    result = self.enhanced_restart_failed_services()
+                else:
+                    result = action_handlers[action_type]()
                 self.log_action(action_type, target, reason, result)
                 return result
             except Exception as e:
@@ -314,20 +455,8 @@ class AutonomousDoctor:
             return f"Action {action_type} not enabled or not found"
 
     def restart_failed_services(self) -> str:
-        """Restart all failed services"""
-        failed_services = self.run_command("systemctl --failed --no-legend | awk '{print $1}'")
-        if not failed_services or "no units" in failed_services.lower():
-            return "No failed services found"
-        
-        results = []
-        for service in failed_services.split('\n'):
-            service = service.strip()
-            # Skip empty lines and invalid service names
-            if service and not any(char in service for char in ['●', '○', '•', '·']):
-                result = self.run_command(f"systemctl restart {service}")
-                results.append(f"{service}: {result}")
-        
-        return "\n".join(results) if results else "No valid failed services found"
+        """Smart service restart with autonomous troubleshooting"""
+        return self.enhanced_restart_failed_services()
 
     def optimize_network_settings(self) -> str:
         """Optimize network settings based on current conditions"""
@@ -440,25 +569,90 @@ class AutonomousDoctor:
             logger.error(f"AI consultation failed: {e}")
             return None
 
-    def run(self):
-        """Main execution method"""
-        logger.info("Starting Enhanced Autonomous Doctor")
+    def enhanced_restart_failed_services(self):
+        """Smart service restart with troubleshooting"""
+        failed_services = self.run_command("systemctl --failed --no-legend | awk '{print $1}'")
+        if not failed_services or "no units" in failed_services.lower():
+            return "No failed services found"
+        
+        results = []
+        
+        for service in failed_services.split('\n'):
+            service = service.strip()
+            if not service or service in ['', '●']:
+                continue
+                
+            # Get detailed service status
+            service_status = self.run_command(f"systemctl status {service} --no-pager || true")
+            
+            # Analyze the issue
+            recommendations = self.troubleshooter.analyze_service_issue(service, service_status)
+            
+            if recommendations:
+                # Use the first recommendation (highest confidence)
+                recommendation = recommendations[0]
+                result = self.troubleshooter.execute_solution(recommendation, self.run_command)
+                results.append(f"{service}: {result} (AI troubleshooting)")
+            else:
+                # Standard restart for unknown issues
+                check_cmd = f"systemctl cat {service} >/dev/null 2>&1"
+                if subprocess.run(check_cmd, shell=True).returncode == 0:
+                    result = self.run_command(f"systemctl restart {service}")
+                    results.append(f"{service}: {result}")
+                else:
+                    results.append(f"{service}: SKIPPED (not a valid service)")
+        
+        return "\n".join(results)
+
+    def consult_ai_for_troubleshooting(self, service_name, service_logs):
+        """Use Ollama to analyze service issues"""
+        try:
+            prompt = f"""Analyze this service failure and suggest a solution:
+
+Service: {service_name}
+Logs: {service_logs[:2000]}
+
+Common Raspberry Pi service issues:
+- rng-tools: Hardware RNG not available, disable and use haveged
+- avahi-daemon: Network discovery conflicts, disable if not needed
+- bluetooth: Resource intensive, disable if not used
+- Failed dependencies: Check required services
+
+Respond with JSON: {{"solution": "disable|stop|reinstall|investigate", "reason": "explanation", "confidence": "high|medium|low"}}
+"""
+            
+            # You'll need to implement the summarize_text function or use Ollama directly
+            # response = summarize_text(prompt, max_chars=1000)
+            # return json.loads(response)
+            return {"solution": "investigate", "reason": "AI analysis not implemented", "confidence": "low"}
+            
+        except Exception as e:
+            return {"solution": "investigate", "reason": f"AI analysis failed: {e}", "confidence": "low"}
+
+    def run_enhanced(self):
+        """Enhanced execution with autonomous troubleshooting"""
+        logger.info("Starting Enhanced Autonomous Doctor with Troubleshooting")
         
         # Collect health data
         health_data = self.collect_health_data()
-        logger.info(f"Health data collected: {json.dumps(health_data, indent=2)}")
         
-        # Analyze and get recommended actions
+        # Detect Raspberry-specific issues
+        raspberry_issues = self.detect_raspberry_specific_issues()
+        if raspberry_issues:
+            logger.info(f"Detected Raspberry-specific issues: {len(raspberry_issues)}")
+            fix_results = self.execute_autonomous_fixes(raspberry_issues)
+            for result in fix_results:
+                logger.info(f"Autonomous fix: {result}")
+        
+        # Continue with normal analysis and actions
         recommended_actions = self.analyze_system_state()
-        logger.info(f"Recommended actions: {len(recommended_actions)}")
         
-        # Execute actions
+        # Execute actions with smart troubleshooting
         executed_actions = []
         for action in recommended_actions:
-            if action['priority'] == 'high' or len(executed_actions) < 2:  # Limit actions per run
-                logger.info(f"Executing action: {action}")
-                result = self.execute_action(action)
-                executed_actions.append((action, result))
+            logger.info(f"Executing action: {action}")
+            result = self.execute_action(action)
+            executed_actions.append((action, result))
         
         # For complex situations, consult AI
         if not executed_actions and len(recommended_actions) > 0:
@@ -471,6 +665,27 @@ class AutonomousDoctor:
         
         logger.info(f"Enhanced Doctor completed. Actions executed: {len(executed_actions)}")
         return executed_actions
+
+    def learn_from_issues(self):
+        """Learn from recurring issues and adapt"""
+        # Read past actions and results
+        try:
+            with open(ACTIONS_LOG, 'r') as f:
+                past_actions = f.readlines()[-100:]  # Last 100 actions
+            
+            # Analyze patterns of failures
+            recurring_issues = {}
+            for action in past_actions:
+                if 'ERROR' in action or 'FAILED' in action:
+                    # Extract service/issue name and count occurrences
+                    pass  # Implement pattern matching here
+            
+            # Update knowledge base based on learnings
+            if recurring_issues:
+                logger.info(f"Learned from {len(recurring_issues)} recurring issues")
+                
+        except Exception as e:
+            logger.error(f"Learning system error: {e}")
 
 def main():
     """Main function"""
@@ -507,7 +722,7 @@ def main():
     
     # Run the autonomous doctor
     doctor = AutonomousDoctor()
-    results = doctor.run()
+    results = doctor.run_enhanced()
     
     # Print summary
     print(f"\n=== Enhanced Doctor Summary ===")
