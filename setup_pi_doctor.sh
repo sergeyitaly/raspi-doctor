@@ -1,5 +1,3 @@
-# Update your setup script to include web service setup
-cat > setup_pi_doctor_final.sh << 'EOF'
 #!/bin/bash
 
 # Directories
@@ -8,8 +6,8 @@ LOG_DIR="/var/log/ai_health"
 SYSTEMD_DIR="$BASE_DIR"
 
 echo "Step 1: Create directories and set ownership..."
-sudo mkdir -p "$BASE_DIR" "$LOG_DIR"
-sudo chown -R $USER:$USER "$BASE_DIR" "$LOG_DIR"
+sudo mkdir -p "$LOG_DIR"
+sudo chown -R $USER:$USER "$LOG_DIR"
 
 echo "Step 2: Copy scripts to /usr/local/bin and set permissions..."
 # Copy Python script
@@ -32,18 +30,25 @@ for script in raspi_doctor.sh netcheck.sh secscan.sh; do
     fi
 done
 
-# Also make collector.py executable if present
-if [ -f "$BASE_DIR/collector.py" ]; then
-    chmod +x "$BASE_DIR/collector.py"
-    echo "Made collector.py executable"
-fi
-
 echo "Step 3: Setup Python virtual environment and install requirements..."
 cd "$BASE_DIR" || exit 1
-python3 -m venv .venv
+
+# Create venv if it doesn't exist
+if [ ! -d ".venv" ]; then
+    python3 -m venv .venv
+fi
+
 source .venv/bin/activate
 pip install --upgrade pip
-pip install -r requirements.txt
+
+# Install requirements if the file exists
+if [ -f "requirements.txt" ]; then
+    pip install -r requirements.txt
+else
+    # Install default requirements
+    pip install flask requests psutil pyyaml python-dotenv
+fi
+
 deactivate
 
 echo "Step 4: Copy systemd unit files to /etc/systemd/system/..."
@@ -63,7 +68,7 @@ echo "Step 5: Setup web dashboard service on port 8010..."
 sudo tee /etc/systemd/system/pi-doctor-web.service > /dev/null << 'WEB_EOF'
 [Unit]
 Description=Pi Doctor Web Dashboard
-After=network.target enhanced_doctor.timer
+After=network.target
 Wants=network.target
 
 [Service]
@@ -87,8 +92,12 @@ sudo systemctl daemon-reload
 
 echo "Step 7: Enable and start all timers and services..."
 for timer in collect_health.timer raspi_doctor.timer netcheck.timer secscan.timer; do
-    sudo systemctl enable --now "$timer"
-    echo "Enabled and started $timer"
+    if [ -f "/etc/systemd/system/$timer" ]; then
+        sudo systemctl enable --now "$timer"
+        echo "Enabled and started $timer"
+    else
+        echo "WARNING: $timer not found, skipping"
+    fi
 done
 
 # Enable and start web service
@@ -136,14 +145,11 @@ START_EOF
 
 chmod +x "$BASE_DIR/start_pi_doctor.sh"
 
-echo "Setup complete. Active timers:"
+echo "Setup complete. Checking services:"
+echo "Active timers:"
 systemctl list-timers --all | grep -E "collect_health|raspi_doctor|netcheck|secscan" || echo "No timers found"
 
 echo "Web service status:"
-sudo systemctl status pi-doctor-web.service --no-pager -l
+sudo systemctl status pi-doctor-web.service --no-pager -l | head -10
 
 echo "Access your Pi Doctor system at: http://$(hostname -I | awk '{print $1}'):8010"
-EOF
-
-# Make the updated setup script executable
-chmod +x setup_pi_doctor_final.sh
