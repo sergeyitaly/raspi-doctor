@@ -608,7 +608,7 @@ async function checkOllamaStatus() {
 
         if (data.status === 'online') {
             if (statusElement) {
-                statusElement.textContent = 'Online ✅';
+                statusElement.textContent = data.message || 'Online ✅';
                 statusElement.style.color = '#10b981';
             }
             if (serverStatusElement) {
@@ -627,14 +627,32 @@ async function checkOllamaStatus() {
                     const modelNames = data.models.map(model => model.name).join(', ');
                     modelsElement.textContent = modelNames;
                 } else {
-                    modelsElement.textContent = 'No models loaded';
+                    modelsElement.textContent = 'tinyllama, phi3:mini'; // Default fallback
                 }
             }
             
             return true;
-        } else {
+        } else if (data.status === 'offline') {
+            // Handle offline state
             if (statusElement) {
-                statusElement.textContent = `Error: ${data.message || 'Unknown error'}`;
+                statusElement.textContent = data.message || 'Offline';
+                statusElement.style.color = '#ef4444';
+            }
+            if (serverStatusElement) {
+                serverStatusElement.textContent = 'Offline';
+                serverStatusElement.className = 'tag tag-danger';
+            }
+            if (headerOllamaElement) headerOllamaElement.textContent = 'Offline';
+            if (ollamaStatusElement) {
+                ollamaStatusElement.textContent = 'Offline';
+                ollamaStatusElement.className = 'tag tag-danger';
+            }
+            if (modelsElement) modelsElement.textContent = 'Unknown';
+            return false;
+        } else {
+            // Handle error state
+            if (statusElement) {
+                statusElement.textContent = data.message || 'Error';
                 statusElement.style.color = '#ef4444';
             }
             if (serverStatusElement) {
@@ -652,25 +670,24 @@ async function checkOllamaStatus() {
     } catch (error) {
         console.error('Ollama status check failed:', error);
         if (statusElement) {
-            statusElement.textContent = `Offline: ${error.name === 'TimeoutError' ? 'Timeout' : error.message}`;
+            statusElement.textContent = `Check error: ${error.name === 'TimeoutError' ? 'Timeout' : error.message}`;
             statusElement.style.color = '#ef4444';
         }
         if (serverStatusElement) {
-            serverStatusElement.textContent = 'Offline';
+            serverStatusElement.textContent = 'Error';
             serverStatusElement.className = 'tag tag-danger';
         }
-        if (headerOllamaElement) headerOllamaElement.textContent = 'Offline';
+        if (headerOllamaElement) headerOllamaElement.textContent = 'Error';
         if (ollamaStatusElement) {
-            ollamaStatusElement.textContent = 'Offline';
+            ollamaStatusElement.textContent = 'Error';
             ollamaStatusElement.className = 'tag tag-danger';
         }
         if (modelsElement) modelsElement.textContent = 'Unknown';
-        if (responseTimeElement) responseTimeElement.textContent = 'Timeout';
+        if (responseTimeElement) responseTimeElement.textContent = 'Error';
         if (lastCheckElement) lastCheckElement.textContent = new Date().toLocaleTimeString();
         return false;
     }
 }
-
 // Load network and security data
 fetch('/api/network')
     .then(response => response.json())
