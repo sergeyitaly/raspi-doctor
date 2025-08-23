@@ -411,12 +411,18 @@ class ServiceTroubleshooter:
             return f"ERROR: Failed to execute solution for {service}: {e}"
 
 class AutonomousDoctor:
-    def __init__(self):
+    def __init__(self, knowledge_base=None):
         self.config = self.load_config()
         self.thresholds = self.config.get('thresholds', {})
         self.actions_enabled = self.config.get('actions', {})
         self.health_data = {}
         self.knowledge_base = KnowledgeBase()
+        
+        if knowledge_base:
+            self.knowledge_base = knowledge_base
+        else:
+            self.knowledge_base = KnowledgeBase()
+            
         self.troubleshooter = ServiceTroubleshooter(self.knowledge_base)
         self.raspberry_specific_issues = {
             'rng-tools': {
@@ -1213,9 +1219,8 @@ if __name__ == "__main__":
 
     # Initialize the knowledge database
     kb = KnowledgeBase()
-
     logger.info("Knowledge database initialized at %s", KNOWLEDGE_DB)
 
-    # Optionally, start the doctor
-    doctor = AutonomousDoctor()
+    # Pass the existing KnowledgeBase to AutonomousDoctor
+    doctor = AutonomousDoctor(knowledge_base=kb)  # Pass the existing instance
     doctor.run_enhanced()
