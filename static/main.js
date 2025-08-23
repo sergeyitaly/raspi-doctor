@@ -36,6 +36,9 @@ document.addEventListener('DOMContentLoaded', function() {
     
     // Set up event listeners
     setupEventListeners();
+    
+    // Load real logs
+    loadLogs();
 });
 
 function setupEventListeners() {
@@ -57,31 +60,44 @@ function setupEventListeners() {
     };
 
     document.getElementById('refresh-logs').onclick = function() {
-        elements.rawLogs.textContent = 'Logs refreshed ' + new Date().toLocaleTimeString() + 
-            '\n' + elements.rawLogs.textContent;
+        loadLogs();
     };
 
     elements.analyze.onclick = async () => {
         elements.analyze.disabled = true;
         elements.summary.innerHTML = "<div class='loading'></div> Analyzing with AI...";
         
-        // Simulate AI analysis
-        setTimeout(() => {
-            const analyses = [
-                "🤖 AI Analysis Complete:\n\n✅ System health: Good\n📊 CPU usage: Normal range\n💾 Memory: Efficient usage\n🌡️ Temperature: Within limits\n🔒 Security: No issues detected\n\nRecommendation: Continue current operations",
-                "🤖 System Assessment:\n\n⚠️ Moderate memory usage detected\n✅ CPU temperature optimal\n📶 Network stability: Excellent\n🔄 Suggest: Clear cache if memory exceeds 80%\n\nOverall: System performing well",
-                "🤖 Health Report:\n\n✅ All systems nominal\n📊 Load average: 1.2 (optimal)\n💾 Disk space: Plentiful\n🌡️ Thermal management: Effective\n\nStatus: No action required"
-            ];
+        try {
+            const response = await fetch('/api/summary');
+            const data = await response.json();
             
-            elements.summary.textContent = analyses[Math.floor(Math.random() * analyses.length)];
+            if (data.ok) {
+                elements.summary.textContent = data.summary;
+            } else {
+                elements.summary.textContent = "Error: " + data.summary;
+            }
+        } catch (error) {
+            elements.summary.textContent = "Error connecting to server: " + error.message;
+        } finally {
             elements.analyze.disabled = false;
-        }, 2000);
+        }
     };
 }
 
 function toggleLogs() {
     const content = document.getElementById('logs-content');
     content.classList.toggle('expanded');
+}
+
+function loadLogs() {
+    fetch('/api/hardware')
+        .then(response => response.json())
+        .then(data => {
+            elements.rawLogs.textContent = data.report || "No logs available";
+        })
+        .catch(error => {
+            elements.rawLogs.textContent = "Error loading logs: " + error.message;
+        });
 }
 
 function loadInitialData() {
@@ -93,7 +109,19 @@ function loadInitialData() {
     elements.totalMemory.textContent = '4GB';
     elements.totalDisk.textContent = '32GB free';
     
-    elements.network.textContent = '✓ Latency: 12ms\n✓ Packet loss: 0.1%\n✓ Bandwidth: 95Mbps';
+    // Load network data
+    fetch('/api/network')
+        .then(response => response.json())
+        .then(data => {
+            elements.network.textContent = data.summary || 'No network data available';
+        });
+    
+    // Load security data
+    fetch('/api/security')
+        .then(response => response.json())
+        .then(data => {
+            elements.security.textContent = data.report || 'No security data available';
+        });
 }
 
 function simulateLiveData() {
