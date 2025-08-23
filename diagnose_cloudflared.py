@@ -1,7 +1,9 @@
 #!/home/pi/raspi-doctor/.venv/bin/python3
 # diagnose_cloudflared.py
 
-from enhanced_doctor import AutonomousDoctor, ServiceTroubleshooter
+import subprocess  # ADD THIS IMPORT
+import yaml
+from enhanced_doctor import ServiceTroubleshooter
 from enhanced_doctor import KnowledgeBase
 
 def diagnose_cloudflared():
@@ -42,22 +44,17 @@ def diagnose_cloudflared():
     # Check current config
     print("\n=== Current Config Analysis ===")
     try:
-        with open("/home/pi/.cloudflared/config.yml", "r") as f:
-            config_content = f.read()
+        config_content = subprocess.run(f"sudo cat {config_path}", shell=True, capture_output=True, text=True).stdout
         print("Current config content:")
         print(config_content)
         
         # Try to validate YAML
-        import yaml
         try:
             yaml.safe_load(config_content)
             print("✓ Config YAML is valid")
         except yaml.YAMLError as e:
             print(f"✗ YAML Error: {e}")
-            print("Line causing error:", getattr(e, 'problem_mark', 'unknown'))
             
-    except FileNotFoundError:
-        print("Config file not found at /home/pi/.cloudflared/config.yml")
     except Exception as e:
         print(f"Error reading config: {e}")
 

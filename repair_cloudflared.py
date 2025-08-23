@@ -11,9 +11,9 @@ def repair_cloudflared_config():
     config_path = Path("/home/pi/.cloudflared/config.yml")
     backup_path = Path("/home/pi/.cloudflared/config.yml.backup")
     
-    # Backup current config
+    # Backup current config with sudo
     if config_path.exists():
-        subprocess.run(f"cp {config_path} {backup_path}", shell=True)
+        subprocess.run(f"sudo cp {config_path} {backup_path}", shell=True)
         print(f"✓ Backed up config to {backup_path}")
     
     # Check if config exists and is valid
@@ -32,7 +32,7 @@ def repair_cloudflared_config():
             print("Content that caused error:")
             print(content)
             
-            # Create a simple valid config
+            # Create a simple valid config with sudo
             simple_config = """# Cloudflare Tunnel configuration
 # Replace with your actual tunnel ID and credentials path
 tunnel: YOUR_TUNNEL_ID_HERE
@@ -45,14 +45,14 @@ ingress:
   - service: http-status:404
 """
             
-            with open(config_path, "w") as f:
-                f.write(simple_config)
+            # Use sudo to write the file
+            subprocess.run(f"echo '{simple_config}' | sudo tee {config_path} > /dev/null", shell=True)
             
             print("✓ Created simple valid config template")
             print("Please edit with your actual tunnel ID and credentials")
             
     else:
-        # Create config directory and file
+        # Create config directory and file with sudo
         config_path.parent.mkdir(exist_ok=True)
         
         simple_config = """# Cloudflare Tunnel configuration
@@ -60,8 +60,7 @@ tunnel: YOUR_TUNNEL_ID_HERE
 credentials-file: /home/pi/.cloudflared/YOUR_TUNNEL_ID_HERE.json
 """
         
-        with open(config_path, "w") as f:
-            f.write(simple_config)
+        subprocess.run(f"echo '{simple_config}' | sudo tee {config_path} > /dev/null", shell=True)
         
         print("✓ Created new config file with template")
         print("Please edit with your actual tunnel ID and credentials")
