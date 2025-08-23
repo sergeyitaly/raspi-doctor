@@ -105,7 +105,12 @@ function setupOllamaTest() {
             testOutput.textContent = 'Sending prompt to Ollama...';
             
             try {
-                const response = await fetch('/api/test-ollama', {
+                // Create timeout for browser compatibility
+                const timeoutPromise = new Promise((_, reject) => {
+                    setTimeout(() => reject(new Error('Request timed out after 2 minutes')), 120000);
+                });
+                
+                const fetchPromise = fetch('/api/test-ollama', {
                     method: 'POST',
                     headers: {
                         'Content-Type': 'application/json',
@@ -113,7 +118,10 @@ function setupOllamaTest() {
                     body: JSON.stringify({ prompt: prompt })
                 });
                 
+                // Race between fetch and timeout
+                const response = await Promise.race([fetchPromise, timeoutPromise]);
                 const data = await response.json();
+                
                 if (data.success) {
                     testOutput.textContent = data.response;
                 } else {
@@ -592,9 +600,17 @@ async function checkOllamaStatus() {
 
     try {
         const startTime = Date.now();
-        const response = await fetch('/api/ollama-status', {
-            signal: AbortSignal.timeout(5000)
+        
+        // Create a timeout promise for browser compatibility
+        const timeoutPromise = new Promise((_, reject) => {
+            setTimeout(() => reject(new Error('Timeout')), 5000);
         });
+        
+        // Create the fetch promise
+        const fetchPromise = fetch('/api/ollama-status');
+        
+        // Race between fetch and timeout
+        const response = await Promise.race([fetchPromise, timeoutPromise]);
         const endTime = Date.now();
         const responseTime = endTime - startTime;
 
@@ -670,7 +686,7 @@ async function checkOllamaStatus() {
     } catch (error) {
         console.error('Ollama status check failed:', error);
         if (statusElement) {
-            statusElement.textContent = `Check error: ${error.name === 'TimeoutError' ? 'Timeout' : error.message}`;
+            statusElement.textContent = `Check error: ${error.message || 'Unknown error'}`;
             statusElement.style.color = '#ef4444';
         }
         if (serverStatusElement) {
