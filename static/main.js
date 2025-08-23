@@ -1,32 +1,40 @@
-// DOM Elements
+// DOM Elements - with safe element access
+function getElement(id) {
+    const element = document.getElementById(id);
+    if (!element) {
+        console.warn(`Element with ID '${id}' not found`);
+    }
+    return element;
+}
+
 const elements = {
-    analyze: document.getElementById('analyze'),
-    summary: document.getElementById('summary'),
-    network: document.getElementById('network'),
-    security: document.getElementById('security'),
-    rawLogs: document.getElementById('raw-logs'),
-    headerCpu: document.getElementById('header-cpu'),
-    headerMemory: document.getElementById('header-memory'),
-    headerStatus: document.getElementById('header-status'),
-    metricCpu: document.getElementById('metric-cpu'),
-    metricMemory: document.getElementById('metric-memory'),
-    metricDisk: document.getElementById('metric-disk'),
-    uptime: document.getElementById('uptime'),
-    loadAvg: document.getElementById('load-avg'),
-    processCount: document.getElementById('process-count'),
-    cpuCores: document.getElementById('cpu-cores'),
-    totalMemory: document.getElementById('total-memory'),
-    totalDisk: document.getElementById('total-disk'),
-    overallHealth: document.getElementById('overall-health'),
-    aiStatus: document.getElementById('ai-status'),
-    ollamaActions: document.getElementById('ollama-actions'),
-    patternsCount: document.getElementById('patterns-count'),
-    actionsCount: document.getElementById('actions-count'),
-    metricsCount: document.getElementById('metrics-count'),
-    successRate: document.getElementById('success-rate'),
-    dbStatus: document.getElementById('db-status'),
-    aiDoctorStatus: document.getElementById('ai-doctor-status'),
-    ollamaStatus: document.getElementById('ollama-status')
+    analyze: getElement('analyze'),
+    summary: getElement('summary'),
+    network: getElement('network'),
+    security: getElement('security'),
+    rawLogs: getElement('raw-logs'),
+    headerCpu: getElement('header-cpu'),
+    headerMemory: getElement('header-memory'),
+    headerStatus: getElement('header-status'),
+    metricCpu: getElement('metric-cpu'),
+    metricMemory: getElement('metric-memory'),
+    metricDisk: getElement('metric-disk'),
+    uptime: getElement('uptime'),
+    loadAvg: getElement('load-avg'),
+    processCount: getElement('process-count'),
+    cpuCores: getElement('cpu-cores'),
+    totalMemory: getElement('total-memory'),
+    totalDisk: getElement('total-disk'),
+    overallHealth: getElement('overall-health'),
+    aiStatus: getElement('ai-status'),
+    ollamaActions: getElement('ollama-actions'),
+    patternsCount: getElement('patterns-count'),
+    actionsCount: getElement('actions-count'),
+    metricsCount: getElement('metrics-count'),
+    successRate: getElement('success-rate'),
+    dbStatus: getElement('db-status'),
+    aiDoctorStatus: getElement('ai-doctor-status'),
+    ollamaStatus: getElement('ollama-status')
 };
 
 // Initialize charts
@@ -53,13 +61,33 @@ document.addEventListener('DOMContentLoaded', function() {
     // Load real logs
     loadLogs();
     
-    // Initialize Ollama status check
-    checkOllamaStatus();
-    setInterval(checkOllamaStatus, 30000);
+    // Initialize Ollama status check only if elements exist
+    if (checkOllamaElementsExist()) {
+        checkOllamaStatus();
+        setInterval(checkOllamaStatus, 30000);
+    }
     
     // Setup Ollama test functionality
     setupOllamaTest();
 });
+
+// Check if all Ollama status elements exist
+function checkOllamaElementsExist() {
+    const requiredElements = [
+        'ollama-status-text', 'ollama-server-status', 'ollama-models',
+        'ollama-response-time', 'ollama-last-check', 'header-ollama', 'ollama-status'
+    ];
+    
+    const allExist = requiredElements.every(id => {
+        const exists = document.getElementById(id) !== null;
+        if (!exists) {
+            console.warn(`Ollama element '${id}' not found`);
+        }
+        return exists;
+    });
+    
+    return allExist;
+}
 
 function setupOllamaTest() {
     const testPromptBtn = document.getElementById('test-ollama-prompt');
@@ -67,7 +95,7 @@ function setupOllamaTest() {
     const testInput = document.getElementById('ollama-test-input');
     const testOutput = document.getElementById('ollama-test-output');
     
-    if (testPromptBtn) {
+    if (testPromptBtn && testInput && testOutput) {
         testPromptBtn.addEventListener('click', async function() {
             const prompt = testInput.value.trim();
             if (!prompt) return;
@@ -100,7 +128,7 @@ function setupOllamaTest() {
         });
     }
     
-    if (clearTestBtn) {
+    if (clearTestBtn && testInput && testOutput) {
         clearTestBtn.addEventListener('click', function() {
             testInput.value = '';
             testOutput.textContent = 'Response will appear here...';
@@ -549,6 +577,11 @@ function updateChart() {
 }
 
 async function checkOllamaStatus() {
+    // Check if all required elements exist before proceeding
+    if (!checkOllamaElementsExist()) {
+        return false;
+    }
+    
     const statusElement = document.getElementById('ollama-status-text');
     const serverStatusElement = document.getElementById('ollama-server-status');
     const modelsElement = document.getElementById('ollama-models');
@@ -556,14 +589,6 @@ async function checkOllamaStatus() {
     const lastCheckElement = document.getElementById('ollama-last-check');
     const headerOllamaElement = document.getElementById('header-ollama');
     const ollamaStatusElement = document.getElementById('ollama-status');
-
-    // Check if elements exist before trying to update them
-    if (!statusElement || !serverStatusElement || !modelsElement || 
-        !responseTimeElement || !lastCheckElement || !headerOllamaElement || 
-        !ollamaStatusElement) {
-        console.warn('Some Ollama status elements not found');
-        return false;
-    }
 
     try {
         const startTime = Date.now();
@@ -576,52 +601,72 @@ async function checkOllamaStatus() {
         const data = await response.json();
         
         // Update response time
-        responseTimeElement.textContent = `${responseTime} ms`;
+        if (responseTimeElement) responseTimeElement.textContent = `${responseTime} ms`;
         
         // Update last check time
-        lastCheckElement.textContent = new Date().toLocaleTimeString();
+        if (lastCheckElement) lastCheckElement.textContent = new Date().toLocaleTimeString();
 
         if (data.status === 'online') {
-            statusElement.textContent = 'Online ✅';
-            statusElement.style.color = '#10b981';
-            serverStatusElement.textContent = 'Online';
-            serverStatusElement.className = 'tag tag-success';
-            headerOllamaElement.textContent = 'Online';
-            ollamaStatusElement.textContent = 'Online';
-            ollamaStatusElement.className = 'tag tag-success';
+            if (statusElement) {
+                statusElement.textContent = 'Online ✅';
+                statusElement.style.color = '#10b981';
+            }
+            if (serverStatusElement) {
+                serverStatusElement.textContent = 'Online';
+                serverStatusElement.className = 'tag tag-success';
+            }
+            if (headerOllamaElement) headerOllamaElement.textContent = 'Online';
+            if (ollamaStatusElement) {
+                ollamaStatusElement.textContent = 'Online';
+                ollamaStatusElement.className = 'tag tag-success';
+            }
             
             // Show available models
-            if (data.models && data.models.length > 0) {
-                const modelNames = data.models.map(model => model.name).join(', ');
-                modelsElement.textContent = modelNames;
-            } else {
-                modelsElement.textContent = 'No models loaded';
+            if (modelsElement) {
+                if (data.models && data.models.length > 0) {
+                    const modelNames = data.models.map(model => model.name).join(', ');
+                    modelsElement.textContent = modelNames;
+                } else {
+                    modelsElement.textContent = 'No models loaded';
+                }
             }
             
             return true;
         } else {
-            statusElement.textContent = `Error: ${data.message || 'Unknown error'}`;
-            statusElement.style.color = '#ef4444';
-            serverStatusElement.textContent = 'Error';
-            serverStatusElement.className = 'tag tag-danger';
-            headerOllamaElement.textContent = 'Error';
-            ollamaStatusElement.textContent = 'Error';
-            ollamaStatusElement.className = 'tag tag-danger';
-            modelsElement.textContent = 'Unknown';
+            if (statusElement) {
+                statusElement.textContent = `Error: ${data.message || 'Unknown error'}`;
+                statusElement.style.color = '#ef4444';
+            }
+            if (serverStatusElement) {
+                serverStatusElement.textContent = 'Error';
+                serverStatusElement.className = 'tag tag-danger';
+            }
+            if (headerOllamaElement) headerOllamaElement.textContent = 'Error';
+            if (ollamaStatusElement) {
+                ollamaStatusElement.textContent = 'Error';
+                ollamaStatusElement.className = 'tag tag-danger';
+            }
+            if (modelsElement) modelsElement.textContent = 'Unknown';
             return false;
         }
     } catch (error) {
         console.error('Ollama status check failed:', error);
-        statusElement.textContent = `Offline: ${error.name === 'TimeoutError' ? 'Timeout' : error.message}`;
-        statusElement.style.color = '#ef4444';
-        serverStatusElement.textContent = 'Offline';
-        serverStatusElement.className = 'tag tag-danger';
-        headerOllamaElement.textContent = 'Offline';
-        ollamaStatusElement.textContent = 'Offline';
-        ollamaStatusElement.className = 'tag tag-danger';
-        modelsElement.textContent = 'Unknown';
-        responseTimeElement.textContent = 'Timeout';
-        lastCheckElement.textContent = new Date().toLocaleTimeString();
+        if (statusElement) {
+            statusElement.textContent = `Offline: ${error.name === 'TimeoutError' ? 'Timeout' : error.message}`;
+            statusElement.style.color = '#ef4444';
+        }
+        if (serverStatusElement) {
+            serverStatusElement.textContent = 'Offline';
+            serverStatusElement.className = 'tag tag-danger';
+        }
+        if (headerOllamaElement) headerOllamaElement.textContent = 'Offline';
+        if (ollamaStatusElement) {
+            ollamaStatusElement.textContent = 'Offline';
+            ollamaStatusElement.className = 'tag tag-danger';
+        }
+        if (modelsElement) modelsElement.textContent = 'Unknown';
+        if (responseTimeElement) responseTimeElement.textContent = 'Timeout';
+        if (lastCheckElement) lastCheckElement.textContent = new Date().toLocaleTimeString();
         return false;
     }
 }
