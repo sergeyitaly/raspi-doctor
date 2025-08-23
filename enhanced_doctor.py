@@ -10,6 +10,12 @@ import requests
 from pathlib import Path
 import logging
 from typing import Dict, List, Any, Optional
+import sqlite3
+import pickle
+import hashlib
+import numpy as np
+from collections import deque
+import statistics
 
 # Configuration
 CONFIG_FILE = Path("./config.yaml")
@@ -17,6 +23,8 @@ LOG_DIR = Path("/var/log/ai_health")
 HEALTH_LOG = LOG_DIR / "health.log"
 ACTIONS_LOG = LOG_DIR / "actions.log"
 DECISIONS_LOG = LOG_DIR / "decisions.log"
+KNOWLEDGE_DB = LOG_DIR / "knowledge.db"
+PATTERNS_FILE = LOG_DIR / "patterns.pkl"
 OLLAMA_HOST = os.getenv("OLLAMA_HOST", "http://127.0.0.1:11434")
 MODEL = os.getenv("OLLAMA_MODEL", "phi3:mini")
 
@@ -31,8 +39,268 @@ logging.basicConfig(
 )
 logger = logging.getLogger("enhanced_doctor")
 
+class KnowledgeBase:
+    def __init__(self, db_path=KNOWLEDGE_DB):
+        self.db_path = db_path
+        self.init_db()
+        
+    def init_db(self):
+        """Initialize the knowledge database"""
+        conn = sqlite3.connect(self.db_path)
+        cursor = conn.cursor()
+        
+        # System patterns table
+        cursor.execute('''
+        CREATE TABLE IF NOT EXISTS system_patterns (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            pattern_hash TEXT UNIQUE,
+            pattern_type TEXT,
+            pattern_data BLOB,
+            first_seen TIMESTAMP,
+            last_seen TIMESTAMP,
+            occurrence_count INTEGER,
+            severity REAL,
+            confidence REAL,
+            solution TEXT,
+            success_rate REAL
+        )
+        ''')
+        
+        # Action outcomes table
+        cursor.execute('''
+        CREATE TABLE IF NOT EXISTS action_outcomes (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            action_type TEXT,
+            target TEXT,
+            reason TEXT,
+            result TEXT,
+            success INTEGER,
+            timestamp TIMESTAMP,
+            system_state_hash TEXT,
+            improvement REAL
+        )
+        ''')
+        
+        # Long-term metrics table
+        cursor.execute('''
+        CREATE TABLE IF NOT EXISTS long_term_metrics (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            metric_name TEXT,
+            metric_value REAL,
+            timestamp TIMESTAMP,
+            context TEXT
+        )
+        ''')
+        
+        conn.commit()
+        conn.close()
+    
+    def store_pattern(self, pattern_type, pattern_data, severity=0.5, confidence=0.5, solution=""):
+        """Store a system pattern in the knowledge base"""
+        pattern_hash = hashlib.md5(json.dumps(pattern_data, sort_keys=True).encode()).hexdigest()
+        
+        conn = sqlite3.connect(self.db_path)
+        cursor = conn.cursor()
+        
+        # Check if pattern exists
+        cursor.execute('SELECT * FROM system_patterns WHERE pattern_hash = ?', (pattern_hash,))
+        existing = cursor.fetchone()
+        
+        if existing:
+            # Update existing pattern
+            cursor.execute('''
+            UPDATE system_patterns 
+            SET last_seen = ?, occurrence_count = occurrence_count + 1, 
+                severity = ?, confidence = ?, solution = ?
+            WHERE pattern_hash = ?
+            ''', (datetime.datetime.now(), severity, confidence, solution, pattern_hash))
+        else:
+            # Insert new pattern
+            cursor.execute('''
+            INSERT INTO system_patterns 
+            (pattern_hash, pattern_type, pattern_data, first_seen, last_seen, 
+             occurrence_count, severity, confidence, solution, success_rate)
+            VALUES (?, ?, ?, ?, ?, 1, ?, ?, ?, 0.5)
+            ''', (pattern_hash, pattern_type, pickle.dumps(pattern_data), 
+                  datetime.datetime.now(), datetime.datetime.now(), 
+                  severity, confidence, solution))
+        
+        conn.commit()
+        conn.close()
+    
+    def record_action_outcome(self, action_type, target, reason, result, success, system_state, improvement=0.0):
+        """Record the outcome of an action for learning"""
+        state_hash = hashlib.md5(json.dumps(system_state, sort_keys=True).encode()).hexdigest()
+        
+        conn = sqlite3.connect(self.db_path)
+        cursor = conn.cursor()
+        
+        cursor.execute('''
+        INSERT INTO action_outcomes 
+        (action_type, target, reason, result, success, timestamp, system_state_hash, improvement)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+        ''', (action_type, target, reason, result, int(success), 
+              datetime.datetime.now(), state_hash, improvement))
+        
+        conn.commit()
+        conn.close()
+    
+    def store_metric(self, metric_name, metric_value, context=None):
+        """Store a long-term metric for trend analysis"""
+        conn = sqlite3.connect(self.db_path)
+        cursor = conn.cursor()
+        
+        cursor.execute('''
+        INSERT INTO long_term_metrics (metric_name, metric_value, timestamp, context)
+        VALUES (?, ?, ?, ?)
+        ''', (metric_name, metric_value, datetime.datetime.now(), json.dumps(context) if context else None))
+        
+        conn.commit()
+        conn.close()
+    
+    def get_similar_patterns(self, pattern_data, pattern_type=None, threshold=0.8):
+        """Find similar patterns in the knowledge base"""
+        pattern_hash = hashlib.md5(json.dumps(pattern_data, sort_keys=True).encode()).hexdigest()
+        
+        conn = sqlite3.connect(self.db_path)
+        cursor = conn.cursor()
+        
+        if pattern_type:
+            cursor.execute('''
+            SELECT pattern_hash, pattern_data, severity, confidence, solution, success_rate
+            FROM system_patterns 
+            WHERE pattern_type = ? AND occurrence_count > 2
+            ORDER BY last_seen DESC
+            LIMIT 10
+            ''', (pattern_type,))
+        else:
+            cursor.execute('''
+            SELECT pattern_hash, pattern_data, severity, confidence, solution, success_rate
+            FROM system_patterns 
+            WHERE occurrence_count > 2
+            ORDER BY last_seen DESC
+            LIMIT 10
+            ''')
+        
+        patterns = []
+        for row in cursor.fetchall():
+            try:
+                stored_data = pickle.loads(row[1])
+                similarity = self.calculate_similarity(pattern_data, stored_data)
+                if similarity >= threshold:
+                    patterns.append({
+                        'hash': row[0],
+                        'data': stored_data,
+                        'severity': row[2],
+                        'confidence': row[3],
+                        'solution': row[4],
+                        'success_rate': row[5],
+                        'similarity': similarity
+                    })
+            except:
+                continue
+        
+        conn.close()
+        return sorted(patterns, key=lambda x: x['similarity'], reverse=True)
+    
+    def calculate_similarity(self, pattern1, pattern2):
+        """Calculate similarity between two patterns"""
+        if not isinstance(pattern1, dict) or not isinstance(pattern2, dict):
+            return 0.0
+        
+        # Simple similarity calculation based on shared keys and values
+        common_keys = set(pattern1.keys()) & set(pattern2.keys())
+        if not common_keys:
+            return 0.0
+        
+        similarity_score = 0.0
+        for key in common_keys:
+            if isinstance(pattern1[key], (int, float)) and isinstance(pattern2[key], (int, float)):
+                # Numeric similarity (normalized difference)
+                max_val = max(abs(pattern1[key]), abs(pattern2[key]))
+                if max_val > 0:
+                    similarity_score += 1.0 - (abs(pattern1[key] - pattern2[key]) / max_val)
+                else:
+                    similarity_score += 1.0
+            elif pattern1[key] == pattern2[key]:
+                # Exact match for non-numeric values
+                similarity_score += 1.0
+        
+        return similarity_score / len(common_keys)
+    
+    def get_action_success_rate(self, action_type, target=None):
+        """Calculate the success rate of a specific action"""
+        conn = sqlite3.connect(self.db_path)
+        cursor = conn.cursor()
+        
+        if target:
+            cursor.execute('''
+            SELECT COUNT(*), AVG(success), AVG(improvement) 
+            FROM action_outcomes 
+            WHERE action_type = ? AND target = ?
+            ''', (action_type, target))
+        else:
+            cursor.execute('''
+            SELECT COUNT(*), AVG(success), AVG(improvement) 
+            FROM action_outcomes 
+            WHERE action_type = ?
+            ''', (action_type,))
+        
+        result = cursor.fetchone()
+        conn.close()
+        
+        if result and result[0] > 0:
+            return {
+                'count': result[0],
+                'success_rate': result[1],
+                'avg_improvement': result[2]
+            }
+        return {'count': 0, 'success_rate': 0.5, 'avg_improvement': 0.0}
+    
+    def get_metric_trend(self, metric_name, hours=24):
+        """Get trend data for a specific metric"""
+        conn = sqlite3.connect(self.db_path)
+        cursor = conn.cursor()
+        
+        cutoff = datetime.datetime.now() - datetime.timedelta(hours=hours)
+        cursor.execute('''
+        SELECT metric_value, timestamp 
+        FROM long_term_metrics 
+        WHERE metric_name = ? AND timestamp > ?
+        ORDER BY timestamp
+        ''', (metric_name, cutoff))
+        
+        results = cursor.fetchall()
+        conn.close()
+        
+        if len(results) < 2:
+            return None
+        
+        values = [r[0] for r in results]
+        timestamps = [r[1] for r in results]
+        
+        # Calculate simple linear trend
+        x = np.arange(len(values))
+        try:
+            slope, intercept = np.polyfit(x, values, 1)
+            trend = "increasing" if slope > 0.1 else "decreasing" if slope < -0.1 else "stable"
+            
+            return {
+                'values': values,
+                'timestamps': timestamps,
+                'trend': trend,
+                'slope': slope,
+                'current': values[-1],
+                'average': statistics.mean(values),
+                'min': min(values),
+                'max': max(values)
+            }
+        except:
+            return None
+
 class ServiceTroubleshooter:
-    def __init__(self):
+    def __init__(self, knowledge_base):
+        self.kb = knowledge_base
         self.problematic_patterns = {
             'rng-tools': {
                 'pattern': 'rng-tools',
@@ -64,6 +332,7 @@ class ServiceTroubleshooter:
         """Analyze service issues and recommend solutions"""
         recommendations = []
         
+        # Check against known patterns
         for issue_name, issue_data in self.problematic_patterns.items():
             if issue_data['pattern'].lower() in service_name.lower() or \
                issue_data['pattern'].lower() in service_status_output.lower():
@@ -74,7 +343,29 @@ class ServiceTroubleshooter:
                     'reason': issue_data['reason'],
                     'solution': issue_data['solution'],
                     'alternative': issue_data['alternative'],
-                    'confidence': 'high' if issue_data['pattern'].lower() in service_name.lower() else 'medium'
+                    'confidence': 'high' if issue_data['pattern'].lower() in service_name.lower() else 'medium',
+                    'source': 'builtin_knowledge'
+                }
+                recommendations.append(recommendation)
+        
+        # Check knowledge base for similar patterns
+        pattern_data = {
+            'service': service_name,
+            'status_output': service_status_output
+        }
+        similar_patterns = self.kb.get_similar_patterns(pattern_data, 'service_issue')
+        
+        for pattern in similar_patterns:
+            if pattern['similarity'] > 0.7:  # Good match
+                recommendation = {
+                    'service': service_name,
+                    'issue': 'learned_pattern',
+                    'reason': f"Similar to previous issue (confidence: {pattern['confidence']:.2f})",
+                    'solution': pattern['solution'],
+                    'alternative': 'Apply learned solution',
+                    'confidence': 'high' if pattern['confidence'] > 0.7 else 'medium',
+                    'source': 'learned_knowledge',
+                    'pattern_similarity': pattern['similarity']
                 }
                 recommendations.append(recommendation)
         
@@ -98,7 +389,13 @@ class ServiceTroubleshooter:
             elif solution == 'investigate_logs':
                 result = f"Investigating {service} logs"
                 logs = run_command_func(f"sudo journalctl -u {service} --no-pager -n 20")
-                # Could add AI analysis here
+                # Store pattern for future learning
+                pattern_data = {
+                    'service': service,
+                    'action': 'investigate_logs',
+                    'logs_sample': logs[:500]  # Store first 500 chars
+                }
+                self.kb.store_pattern('service_logs', pattern_data, severity=0.3)
                 
             elif solution == 'reinstall_service':
                 result = f"Reinstalling {service}"
@@ -119,7 +416,8 @@ class AutonomousDoctor:
         self.thresholds = self.config.get('thresholds', {})
         self.actions_enabled = self.config.get('actions', {})
         self.health_data = {}
-        self.troubleshooter = ServiceTroubleshooter()
+        self.knowledge_base = KnowledgeBase()
+        self.troubleshooter = ServiceTroubleshooter(self.knowledge_base)
         self.raspberry_specific_issues = {
             'rng-tools': {
                 'detection': ['rng-tools', 'hardware RNG', 'no entropy source'],
@@ -141,6 +439,9 @@ class AutonomousDoctor:
             }
         }
         
+        # Load long-term patterns
+        self.load_patterns()
+        
     def load_config(self) -> Dict:
         """Load configuration from YAML file"""
         default_config = {
@@ -158,11 +459,17 @@ class AutonomousDoctor:
                 'auto_restart_services': True,
                 'auto_optimize_network': True,
                 'auto_clear_cache': True,
-                'auto_manage_services': True
+                'auto_manage_services': True,
+                'auto_learn_patterns': True
             },
             'notifications': {
                 'email': '',
                 'webhook': ''
+            },
+            'learning': {
+                'pattern_memory_size': 1000,
+                'min_occurrences_for_learning': 3,
+                'trend_analysis_hours': 72
             }
         }
         
@@ -175,6 +482,27 @@ class AutonomousDoctor:
                 logger.error(f"Error loading config: {e}")
                 return default_config
         return default_config
+
+    def load_patterns(self):
+        """Load learned patterns from file"""
+        self.learned_patterns = {}
+        if PATTERNS_FILE.exists():
+            try:
+                with open(PATTERNS_FILE, 'rb') as f:
+                    self.learned_patterns = pickle.load(f)
+                logger.info(f"Loaded {len(self.learned_patterns)} learned patterns")
+            except Exception as e:
+                logger.error(f"Error loading patterns: {e}")
+                self.learned_patterns = {}
+
+    def save_patterns(self):
+        """Save learned patterns to file"""
+        try:
+            with open(PATTERNS_FILE, 'wb') as f:
+                pickle.dump(self.learned_patterns, f)
+            logger.info(f"Saved {len(self.learned_patterns)} patterns to {PATTERNS_FILE}")
+        except Exception as e:
+            logger.error(f"Error saving patterns: {e}")
 
     def run_command(self, cmd: str) -> str:
         """Run a shell command safely"""
@@ -212,6 +540,14 @@ class AutonomousDoctor:
         
         for issue in detected_issues:
             try:
+                # Store pattern before fixing
+                pattern_data = {
+                    'issue_type': issue['issue'],
+                    'action_taken': issue['command']
+                }
+                self.knowledge_base.store_pattern('raspberry_issue', pattern_data, severity=0.5)
+                
+                # Execute the fix
                 result = self.run_command(issue['command'])
                 results.append(f"{issue['issue']}: {result}")
             except Exception as e:
@@ -222,6 +558,7 @@ class AutonomousDoctor:
     def collect_health_data(self) -> Dict:
         """Collect comprehensive system health data"""
         ts = datetime.datetime.now().isoformat()
+        previous_health = self.health_data.copy() if self.health_data else {}
         
         try:
             # CPU and memory
@@ -249,6 +586,11 @@ class AutonomousDoctor:
             failed_logins = self.count_failed_logins()
             suspicious_ips = self.detect_suspicious_ips()
             
+            # Hardware-specific metrics (Raspberry Pi)
+            voltage = self.run_command("vcgencmd measure_volts | cut -d= -f2") or "N/A"
+            clock_speed = self.run_command("vcgencmd measure_clock arm | awk -F= '{print $2}'") or "N/A"
+            throttling = self.run_command("vcgencmd get_throttled") or "N/A"
+            
             self.health_data = {
                 'timestamp': ts,
                 'cpu': {
@@ -256,7 +598,9 @@ class AutonomousDoctor:
                     'load_1min': load_avg[0],
                     'load_5min': load_avg[1],
                     'load_15min': load_avg[2],
-                    'temperature': float(temp) if temp.replace('.', '').isdigit() else 0.0
+                    'temperature': float(temp) if temp.replace('.', '').isdigit() else 0.0,
+                    'clock_speed': clock_speed,
+                    'throttling': throttling
                 },
                 'memory': {
                     'total_gb': round(mem.total / (1024**3), 2),
@@ -282,6 +626,10 @@ class AutonomousDoctor:
                     'sent_mb': round(net_io.bytes_sent / (1024**2), 2),
                     'received_mb': round(net_io.bytes_recv / (1024**2), 2)
                 },
+                'hardware': {
+                    'voltage': voltage,
+                    'throttling_status': throttling
+                },
                 'services': {
                     'failed_count': int(failed_services) if failed_services.isdigit() else 0
                 },
@@ -291,6 +639,9 @@ class AutonomousDoctor:
                 }
             }
             
+            # Store long-term metrics
+            self.store_long_term_metrics(previous_health)
+            
             # Log health data
             self.log_health_data()
             
@@ -299,6 +650,77 @@ class AutonomousDoctor:
             self.health_data = {'timestamp': ts, 'error': str(e)}
             
         return self.health_data
+
+    def store_long_term_metrics(self, previous_health):
+        """Store metrics for long-term trend analysis"""
+        if not self.health_data:
+            return
+            
+        # Store key metrics
+        metrics_to_store = [
+            ('cpu_percent', self.health_data['cpu']['percent']),
+            ('cpu_temperature', self.health_data['cpu']['temperature']),
+            ('memory_percent', self.health_data['memory']['percent']),
+            ('disk_percent', self.health_data['disk']['percent']),
+            ('load_15min', self.health_data['cpu']['load_15min']),
+            ('network_latency', self.health_data['network']['latency_ms']),
+            ('packet_loss', self.health_data['network']['packet_loss_percent']),
+            ('failed_services', self.health_data['services']['failed_count']),
+            ('failed_logins', self.health_data['security']['failed_logins'])
+        ]
+        
+        for metric_name, metric_value in metrics_to_store:
+            self.knowledge_base.store_metric(metric_name, metric_value, {
+                'timestamp': self.health_data['timestamp']
+            })
+        
+        # Calculate improvement from previous state if available
+        if previous_health and 'cpu' in previous_health:
+            improvement = self.calculate_improvement(previous_health, self.health_data)
+            if improvement != 0:
+                logger.info(f"System improvement since last check: {improvement:.2f}%")
+
+    def calculate_improvement(self, previous, current):
+        """Calculate overall system improvement percentage"""
+        if not previous or not current:
+            return 0.0
+        
+        # Weighted factors for improvement calculation
+        factors = {
+            'cpu_percent': 0.25,
+            'memory_percent': 0.25,
+            'load_15min': 0.20,
+            'disk_percent': 0.15,
+            'failed_services': 0.15
+        }
+        
+        improvement = 0.0
+        for factor, weight in factors.items():
+            if factor == 'failed_services':
+                # For failed services, improvement is reduction in count
+                prev_val = previous['services']['failed_count'] if 'services' in previous else 0
+                curr_val = current['services']['failed_count']
+                if prev_val > 0:
+                    improvement += weight * (prev_val - curr_val) / prev_val * 100
+            else:
+                # For percentages, improvement is reduction in usage
+                if factor == 'cpu_percent':
+                    prev_val = previous['cpu']['percent']
+                    curr_val = current['cpu']['percent']
+                elif factor == 'memory_percent':
+                    prev_val = previous['memory']['percent']
+                    curr_val = current['memory']['percent']
+                elif factor == 'disk_percent':
+                    prev_val = previous['disk']['percent']
+                    curr_val = current['disk']['percent']
+                elif factor == 'load_15min':
+                    prev_val = previous['cpu']['load_15min']
+                    curr_val = current['cpu']['load_15min']
+                
+                if prev_val > 0:
+                    improvement += weight * (prev_val - curr_val) / prev_val * 100
+        
+        return improvement
 
     def measure_latency(self) -> float:
         """Measure network latency to Google DNS"""
@@ -331,8 +753,10 @@ class AutonomousDoctor:
             result = self.run_command("grep 'Failed password' /var/log/auth.log | awk '{print $(NF-3)}' | sort | uniq -c | sort -nr | head -5")
             for line in result.split('\n'):
                 if line.strip():
-                    count, ip = line.strip().split()[:2]
-                    suspicious[ip] = int(count)
+                    parts = line.strip().split()
+                    if len(parts) >= 2:
+                        count, ip = parts[0], parts[1]
+                        suspicious[ip] = int(count)
         except:
             pass
         return suspicious
@@ -346,11 +770,30 @@ class AutonomousDoctor:
             logger.error(f"Error logging health data: {e}")
 
     def analyze_system_state(self) -> List[Dict]:
-        """Analyze system state and recommend actions"""
+        """Analyze system state and recommend actions with learned knowledge"""
         actions = []
         
         if not self.health_data:
             return actions
+        
+        # Check for patterns in current state
+        system_pattern = self.health_data.copy()
+        # Remove timestamp for pattern matching
+        if 'timestamp' in system_pattern:
+            del system_pattern['timestamp']
+        
+        similar_patterns = self.knowledge_base.get_similar_patterns(system_pattern, 'system_state')
+        
+        # Add actions based on learned patterns
+        for pattern in similar_patterns:
+            if pattern['similarity'] > 0.75 and pattern['solution']:
+                actions.append({
+                    'action': pattern['solution'],
+                    'priority': 'high' if pattern['severity'] > 0.7 else 'medium',
+                    'reason': f"Matched learned pattern (confidence: {pattern['confidence']:.2f})",
+                    'learned_pattern': True,
+                    'pattern_similarity': pattern['similarity']
+                })
         
         # CPU Temperature
         cpu_temp = self.health_data['cpu']['temperature']
@@ -418,10 +861,40 @@ class AutonomousDoctor:
                 'reason': f'High packet loss: {self.health_data["network"]["packet_loss_percent"]}%'
             })
         
+        # Check for long-term trends that might indicate emerging issues
+        trend_actions = self.check_long_term_trends()
+        actions.extend(trend_actions)
+        
         # Sort by priority
         priority_order = {'high': 3, 'medium': 2, 'low': 1}
         return sorted(actions, key=lambda x: priority_order.get(x['priority'], 0), reverse=True)
 
+    def check_long_term_trends(self):
+        """Check long-term trends for emerging issues"""
+        actions = []
+        trends_to_check = [
+            ('cpu_temperature', 'high', 'CPU temperature trending upward'),
+            ('memory_percent', 'high', 'Memory usage trending upward'),
+            ('disk_percent', 'high', 'Disk usage trending upward'),
+            ('load_15min', 'high', 'System load trending upward')
+        ]
+        
+        for metric, direction, reason in trends_to_check:
+            trend = self.knowledge_base.get_metric_trend(metric, 
+                                                         self.config['learning']['trend_analysis_hours'])
+            if trend and trend['trend'] == direction:
+                # Check if the trend is significant
+                if abs(trend['slope']) > 0.5:  # Significant trend
+                    actions.append({
+                        'action': 'investigate_trend',
+                        'target': metric,
+                        'priority': 'medium',
+                        'reason': f'{reason}: slope {trend["slope"]:.2f}',
+                        'trend_data': trend
+                    })
+        
+        return actions
+    
     def execute_action(self, action: Dict) -> str:
         """Execute a recommended action"""
         action_type = action['action']
