@@ -1,0 +1,14 @@
+[Unit]
+Description=Ollama Server
+After=network.target
+
+[Service]
+Type=simple
+User=pi
+Group=pi
+ExecStart=/usr/local/bin/ollama serve
+Restart=always
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target

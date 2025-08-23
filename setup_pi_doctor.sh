@@ -68,8 +68,8 @@ echo "Step 5: Setup web dashboard service on port 8010..."
 sudo tee /etc/systemd/system/pi-doctor-web.service > /dev/null << 'WEB_EOF'
 [Unit]
 Description=Pi Doctor Web Dashboard
-After=network.target
-Wants=network.target
+After=network.target ollama.service
+Wants=network.target ollama.service
 
 [Service]
 Type=simple
@@ -87,6 +87,26 @@ RestartSec=5
 WantedBy=multi-user.target
 WEB_EOF
 
+echo "Step 5b: Setup Ollama service..."
+# autodetect path to ollama
+OLLAMA_BIN=$(command -v ollama || echo "/usr/local/bin/ollama")
+sudo tee /etc/systemd/system/ollama.service > /dev/null << OLLAMA_EOF
+[Unit]
+Description=Ollama Server
+After=network.target
+
+[Service]
+Type=simple
+User=pi
+Group=pi
+ExecStart=$OLLAMA_BIN serve
+Restart=always
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target
+OLLAMA_EOF
+
 echo "Step 6: Reload systemd..."
 sudo systemctl daemon-reload
 
@@ -99,6 +119,11 @@ for timer in collect_health.timer raspi_doctor.timer netcheck.timer secscan.time
         echo "WARNING: $timer not found, skipping"
     fi
 done
+
+# Enable and start ollama
+sudo systemctl enable ollama.service
+sudo systemctl start ollama.service
+echo "Enabled and started ollama.service"
 
 # Enable and start web service
 sudo systemctl enable pi-doctor-web.service
@@ -115,8 +140,7 @@ echo "Starting Pi Doctor System on port 8010..."
 # Start Ollama if not running
 if ! curl -s http://localhost:11434/api/tags > /dev/null; then
     echo "Starting Ollama..."
-    pkill -f "ollama serve"
-    nohup ollama serve > ~/ollama_server.log 2>&1 &
+    sudo systemctl start ollama.service
     sleep 5
 fi
 
@@ -151,5 +175,3 @@ systemctl list-timers --all | grep -E "collect_health|raspi_doctor|netcheck|secs
 
 echo "Web service status:"
 sudo systemctl status pi-doctor-web.service --no-pager -l | head -10
-
-echo "Access your Pi Doctor system at: http://$(hostname -I | awk '{print $1}'):8010"
