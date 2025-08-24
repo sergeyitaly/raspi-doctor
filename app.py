@@ -470,7 +470,7 @@ def test_ollama():
                     "stop": ["\n"]
                 }
             },
-            timeout=80
+            timeout=25
         )
         
         if response.status_code == 200:

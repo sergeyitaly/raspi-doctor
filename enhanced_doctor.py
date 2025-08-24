@@ -16,7 +16,7 @@ import hashlib
 import numpy as np
 from collections import deque
 import statistics
-
+from ollama_client import summarize_text
 # Configuration
 CONFIG_FILE = Path("./config.yaml")
 LOG_DIR = Path("/var/log/ai_health")
@@ -1372,7 +1372,7 @@ class AutonomousDoctor:
         """Consult AI for complex decisions"""
         try:
             prompt = f"""Analyze this system health data and suggest the most appropriate action:
-            {context}
+            {context}[:1000]
             
             Respond with JSON only: {{"action": "action_name", "target": "optional_target", "reason": "explanation"}}
             Available actions: clear_cache, throttle_cpu, clean_logs, restart_failed_services, optimize_network, manage_services, increase_security, ban_ip, none"""
@@ -1383,16 +1383,16 @@ class AutonomousDoctor:
                 "prompt": prompt,
                 "stream": False,
                 "options": {
-                    "num_predict": 16,
+                    "num_predict": 10,
                     "num_thread": 1,
-                    "temperature": 0.2,
-                    "top_k": 6,
+                    "temperature": 0.3,
+                    "top_k": 5,
                     "top_p": 0.4,
                     "stop": ["\n"]
                 }        
              }
             
-            response = requests.post(url, json=payload, timeout=80)
+            response = requests.post(url, json=payload, timeout=25)
             response.raise_for_status()
             ai_response = response.json().get('response', '').strip()
             
@@ -1476,9 +1476,9 @@ Respond with JSON: {{"solution": "disable|stop|reinstall|investigate", "reason":
 """
             
             # You'll need to implement the summarize_text function or use Ollama directly
-            # response = summarize_text(prompt, max_chars=1000)
-            # return json.loads(response)
-            return {"solution": "investigate", "reason": "AI analysis not implemented", "confidence": "low"}
+            response = summarize_text(prompt, max_chars=1000)
+            return json.loads(response)
+            #return {"solution": "investigate", "reason": "AI analysis not implemented", "confidence": "low"}
             
         except Exception as e:
             return {"solution": "investigate", "reason": f"AI analysis failed: {e}", "confidence": "low"}
