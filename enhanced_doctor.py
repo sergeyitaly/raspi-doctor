@@ -1380,21 +1380,21 @@ class AutonomousDoctor:
             url = f"{OLLAMA_HOST}/api/generate"
             payload = {
                 "model": MODEL,
-                "prompt": prompt[:150],
+                "prompt": prompt,
                 "stream": False,
             "options": {
-                "num_predict": 300,
+                "num_predict": 120,
                 "num_thread": 1,
                 "temperature": 0.1,
                 "top_k": 20,
                 "top_p": 0.7,
-                "stop": ["\n\n", "##"],
+                "stop": ["}"],
                 "repeat_penalty": 1.1
             }
      
              }
             
-            response = requests.post(url, json=payload, timeout=20)
+            response = requests.post(url, json=payload, timeout=80)
             response.raise_for_status()
             ai_response = response.json().get('response', '').strip()
             
