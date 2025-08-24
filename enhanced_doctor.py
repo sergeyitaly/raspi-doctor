@@ -1392,7 +1392,7 @@ class AutonomousDoctor:
                 }        
              }
             
-            response = requests.post(url, json=payload, timeout=25)
+            response = requests.post(url, json=payload, timeout=10)
             response.raise_for_status()
             ai_response = response.json().get('response', '').strip()
             

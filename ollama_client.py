@@ -249,7 +249,7 @@ def summarize_text(text: str, prompt: str = None, max_chars=6000):
                     "stop": ["\n"]
                 }
         }
-        data = safe_ollama_request(url, payload, timeout=25)
+        data = safe_ollama_request(url, payload, timeout=10)
         return data.get("response", "").strip()
     except Exception as e:
         return f"Error consulting AI: {str(e)}"
@@ -288,7 +288,7 @@ def analyze_network_logs(log_content: str, max_chars=2000):
                     "stop": ["\n"]
                 }
         }
-        data = safe_ollama_request(url, payload, timeout=25)
+        data = safe_ollama_request(url, payload, timeout=10)
         return data.get("response", "").strip()
     except Exception as e:
         return f"Network analysis unavailable: {str(e)}"
@@ -327,7 +327,7 @@ def analyze_security_logs(log_content: str, max_chars=2000):
                     "stop": ["\n"]
                 }
         }
-        data = safe_ollama_request(url, payload, timeout=25)
+        data = safe_ollama_request(url, payload, timeout=10)
         return data.get("response", "").strip()
     except Exception as e:
         return f"Security analysis unavailable: {str(e)}"
@@ -401,7 +401,7 @@ def consult_ai_for_service_issue(service_name: str, logs: str, service_status: s
                     "stop": ["\n"]
                 }
         }
-        data = safe_ollama_request(url, payload, timeout=25)
+        data = safe_ollama_request(url, payload, timeout=10)
         response_text = data.get("response", "").strip()
         
         # Try to extract JSON from response
@@ -489,7 +489,7 @@ def analyze_system_trends():
                     "stop": ["\n"]
                 }
         }
-        data = safe_ollama_request(url, payload, timeout=25)
+        data = safe_ollama_request(url, payload, timeout=10)
         return data.get("response", "").strip()
     except Exception as e:
         return f"Trend analysis failed: {str(e)}"
