@@ -461,20 +461,17 @@ def test_ollama():
                 "model": MODEL, 
                 'prompt': prompt,
                 'stream': False,
-                'options': {
-                    'num_predict': 100,
-                    'num_thread': 2,
-                    'temperature': 0.3,        # Slightly higher for creative solutions
-                    'top_k': 30,
-                    'top_p': 0.75,
-                    'stop': ['\n\n', '###', 'Next step:'],
-                    'repeat_penalty': 1.1,
-                    'mirostat': 1,             # For better solution quality
-                    'mirostat_tau': 4.0,
-                    'seed': 42
+                "options": {
+                    "num_predict": 16,
+                    "num_thread": 1,
+                    "temperature": 0.2,
+                    "top_k": 6,
+                    "top_p": 0.4,
+                    "batch_size": 64,
+                    "stop": ["\n"]
                 }
             },
-            timeout=45
+            timeout=80
         )
         
         if response.status_code == 200:

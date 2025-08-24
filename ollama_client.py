@@ -240,15 +240,17 @@ def summarize_text(text: str, prompt: str = None, max_chars=6000):
             "model": MODEL, 
             "prompt": full_prompt, 
             'stream': False,
-                'options': {
-                    'num_predict': 200,        
-                    'num_thread': 2,           
-                    'temperature': 0.1,        
-                    'top_p': 0.9,              
-                    'stop': ['.', '!', '?']    
-                } 
+                "options": {
+                    "num_predict": 16,
+                    "num_thread": 1,
+                    "temperature": 0.2,
+                    "top_k": 6,
+                    "top_p": 0.4,
+                    "batch_size": 64,
+                    "stop": ["\n"]
+                }
         }
-        data = safe_ollama_request(url, payload, timeout=120)
+        data = safe_ollama_request(url, payload, timeout=80)
         return data.get("response", "").strip()
     except Exception as e:
         return f"Error consulting AI: {str(e)}"
@@ -277,15 +279,17 @@ def analyze_network_logs(log_content: str, max_chars=2000):
             "model": MODEL, 
             "prompt": f"{prompt}\n\n--- NETWORK LOGS ---\n{log_content}",
             'stream': False,
-                'options': {
-                    'num_predict': 200,        
-                    'num_thread': 2,           
-                    'temperature': 0.1,        
-                    'top_p': 0.9,              
-                    'stop': ['.', '!', '?']    
-                } 
+                "options": {
+                    "num_predict": 16,
+                    "num_thread": 1,
+                    "temperature": 0.2,
+                    "top_k": 6,
+                    "top_p": 0.4,
+                    "batch_size": 64,
+                    "stop": ["\n"]
+                }
         }
-        data = safe_ollama_request(url, payload, timeout=60)
+        data = safe_ollama_request(url, payload, timeout=80)
         return data.get("response", "").strip()
     except Exception as e:
         return f"Network analysis unavailable: {str(e)}"
@@ -314,15 +318,17 @@ def analyze_security_logs(log_content: str, max_chars=2000):
             "model": MODEL, 
             "prompt": f"{prompt}\n\n--- SECURITY LOGS ---\n{log_content}",
             'stream': False,
-                'options': {
-                    'num_predict': 200,        
-                    'num_thread': 2,           
-                    'temperature': 0.1,        
-                    'top_p': 0.9,              
-                    'stop': ['.', '!', '?']    
-                } 
+                "options": {
+                    "num_predict": 16,
+                    "num_thread": 1,
+                    "temperature": 0.2,
+                    "top_k": 6,
+                    "top_p": 0.4,
+                    "batch_size": 64,
+                    "stop": ["\n"]
+                }
         }
-        data = safe_ollama_request(url, payload, timeout=60)
+        data = safe_ollama_request(url, payload, timeout=80)
         return data.get("response", "").strip()
     except Exception as e:
         return f"Security analysis unavailable: {str(e)}"
@@ -387,15 +393,17 @@ def consult_ai_for_service_issue(service_name: str, logs: str, service_status: s
             "model": MODEL, 
             "prompt": prompt, 
             'stream': False,
-                'options': {
-                    'num_predict': 200,        
-                    'num_thread': 2,           
-                    'temperature': 0.1,        
-                    'top_p': 0.9,              
-                    'stop': ['.', '!', '?']    
-                } 
+                "options": {
+                    "num_predict": 16,
+                    "num_thread": 1,
+                    "temperature": 0.2,
+                    "top_k": 6,
+                    "top_p": 0.4,
+                    "batch_size": 64,
+                    "stop": ["\n"]
+                }
         }
-        data = safe_ollama_request(url, payload, timeout=120)
+        data = safe_ollama_request(url, payload, timeout=80)
         response_text = data.get("response", "").strip()
         
         # Try to extract JSON from response
@@ -474,15 +482,17 @@ def analyze_system_trends():
             "model": MODEL, 
             "prompt": full_prompt, 
             'stream': False,
-                'options': {
-                    'num_predict': 200,        
-                    'num_thread': 2,           
-                    'temperature': 0.1,        
-                    'top_p': 0.9,              
-                    'stop': ['.', '!', '?']    
-                } 
+                "options": {
+                    "num_predict": 16,
+                    "num_thread": 1,
+                    "temperature": 0.2,
+                    "top_k": 6,
+                    "top_p": 0.4,
+                    "batch_size": 64,
+                    "stop": ["\n"]
+                }
         }
-        data = safe_ollama_request(url, payload, timeout=240)
+        data = safe_ollama_request(url, payload, timeout=80)
         return data.get("response", "").strip()
     except Exception as e:
         return f"Trend analysis failed: {str(e)}"
