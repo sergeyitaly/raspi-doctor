@@ -240,17 +240,13 @@ def summarize_text(text: str, prompt: str = None, max_chars=6000):
             "model": MODEL, 
             "prompt": full_prompt, 
             'stream': False,
-            'options': {
-                'num_predict': 300,         
-                'num_thread': 2,           
-                'temperature': 0.1,        
-                'top_k': 20,               
-                'top_p': 0.7,              
-                'stop': ['.', '!', '?', '\n'],
-                'repeat_penalty': 1.1,     
-                'batch_size': 512,         
-                'seed': 42                 
-            }
+                'options': {
+                    'num_predict': 200,        
+                    'num_thread': 2,           
+                    'temperature': 0.1,        
+                    'top_p': 0.9,              
+                    'stop': ['.', '!', '?']    
+                } 
         }
         data = safe_ollama_request(url, payload, timeout=120)
         return data.get("response", "").strip()
@@ -281,17 +277,13 @@ def analyze_network_logs(log_content: str, max_chars=2000):
             "model": MODEL, 
             "prompt": f"{prompt}\n\n--- NETWORK LOGS ---\n{log_content}",
             'stream': False,
-            'options': {
-                'num_predict': 300,         
-                'num_thread': 2,           
-                'temperature': 0.1,        
-                'top_k': 20,               
-                'top_p': 0.7,              
-                'stop': ['.', '!', '?', '\n'],
-                'repeat_penalty': 1.1,     
-                'batch_size': 512,         
-                'seed': 42                 
-            }
+                'options': {
+                    'num_predict': 200,        
+                    'num_thread': 2,           
+                    'temperature': 0.1,        
+                    'top_p': 0.9,              
+                    'stop': ['.', '!', '?']    
+                } 
         }
         data = safe_ollama_request(url, payload, timeout=60)
         return data.get("response", "").strip()
@@ -322,17 +314,13 @@ def analyze_security_logs(log_content: str, max_chars=2000):
             "model": MODEL, 
             "prompt": f"{prompt}\n\n--- SECURITY LOGS ---\n{log_content}",
             'stream': False,
-            'options': {
-                'num_predict': 300,         
-                'num_thread': 2,           
-                'temperature': 0.1,        
-                'top_k': 20,               
-                'top_p': 0.7,              
-                'stop': ['.', '!', '?', '\n'],
-                'repeat_penalty': 1.1,     
-                'batch_size': 512,         
-                'seed': 42                 
-            }
+                'options': {
+                    'num_predict': 200,        
+                    'num_thread': 2,           
+                    'temperature': 0.1,        
+                    'top_p': 0.9,              
+                    'stop': ['.', '!', '?']    
+                } 
         }
         data = safe_ollama_request(url, payload, timeout=60)
         return data.get("response", "").strip()
@@ -399,17 +387,13 @@ def consult_ai_for_service_issue(service_name: str, logs: str, service_status: s
             "model": MODEL, 
             "prompt": prompt, 
             'stream': False,
-            'options': {
-                'num_predict': 300,         
-                'num_thread': 2,           
-                'temperature': 0.1,        
-                'top_k': 20,               
-                'top_p': 0.7,              
-                'stop': ['.', '!', '?', '\n'],
-                'repeat_penalty': 1.1,     
-                'batch_size': 512,         
-                'seed': 42                 
-            }
+                'options': {
+                    'num_predict': 200,        
+                    'num_thread': 2,           
+                    'temperature': 0.1,        
+                    'top_p': 0.9,              
+                    'stop': ['.', '!', '?']    
+                } 
         }
         data = safe_ollama_request(url, payload, timeout=120)
         response_text = data.get("response", "").strip()
@@ -490,17 +474,13 @@ def analyze_system_trends():
             "model": MODEL, 
             "prompt": full_prompt, 
             'stream': False,
-            'options': {
-                'num_predict': 300,         
-                'num_thread': 2,           
-                'temperature': 0.1,        
-                'top_k': 20,               
-                'top_p': 0.7,              
-                'stop': ['.', '!', '?', '\n'],
-                'repeat_penalty': 1.1,     
-                'batch_size': 512,         
-                'seed': 42                 
-            }
+                'options': {
+                    'num_predict': 200,        
+                    'num_thread': 2,           
+                    'temperature': 0.1,        
+                    'top_p': 0.9,              
+                    'stop': ['.', '!', '?']    
+                } 
         }
         data = safe_ollama_request(url, payload, timeout=240)
         return data.get("response", "").strip()

@@ -1383,15 +1383,11 @@ class AutonomousDoctor:
                 "prompt": prompt,
                 "stream": False,
                 'options': {
-                    'num_predict': 300,         
+                    'num_predict': 200,        
                     'num_thread': 2,           
                     'temperature': 0.1,        
-                    'top_k': 20,               
-                    'top_p': 0.7,              
-                    'stop': ['.', '!', '?', '\n'],
-                    'repeat_penalty': 1.1,     
-                    'batch_size': 512,         
-                    'seed': 42                 
+                    'top_p': 0.9,              
+                    'stop': ['.', '!', '?']    
                 }           
              }
             
