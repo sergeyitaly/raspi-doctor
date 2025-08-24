@@ -1383,7 +1383,7 @@ class AutonomousDoctor:
                 "prompt": prompt,
                 "stream": False,
                 'options': {
-                    'num_predict': 200,
+                    'num_predict': 500,
                     'num_thread': 1,
                     'temperature': 0.2,
                     'top_k': 30,

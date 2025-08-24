@@ -238,10 +238,10 @@ def summarize_text(text: str, prompt: str = None, max_chars=6000):
         url = f"{OLLAMA_HOST}/api/generate"
         payload = {
             "model": MODEL, 
-            "prompt": full_prompt[:75], 
+            "prompt": full_prompt[:1000], 
             'stream': False,
                 'options': {
-                    'num_predict': 200,
+                    'num_predict': 500,
                     'num_thread': 1,
                     'temperature': 0.2,
                     'top_k': 30,
@@ -281,7 +281,7 @@ def analyze_network_logs(log_content: str, max_chars=2000):
             "prompt": fullprompt[:75],
             'stream': False,
                 'options': {
-                    'num_predict': 200,
+                    'num_predict': 500,
                     'num_thread': 1,
                     'temperature': 0.2,
                     'top_k': 30,
@@ -321,7 +321,7 @@ def analyze_security_logs(log_content: str, max_chars=2000):
             "prompt": f"{prompt}\n\n--- SECURITY LOGS ---\n{log_content}"[:75],
             'stream': False,
                 'options': {
-                    'num_predict': 200,
+                    'num_predict': 500,
                     'num_thread': 1,
                     'temperature': 0.2,
                     'top_k': 30,
@@ -396,7 +396,7 @@ def consult_ai_for_service_issue(service_name: str, logs: str, service_status: s
             "prompt": prompt[:75], 
             'stream': False,
                 'options': {
-                    'num_predict': 200,
+                    'num_predict': 500,
                     'num_thread': 1,
                     'temperature': 0.2,
                     'top_k': 30,
@@ -485,7 +485,7 @@ def analyze_system_trends():
             "prompt": full_prompt[:75], 
             'stream': False,
                 'options': {
-                    'num_predict': 200,
+                    'num_predict': 500,
                     'num_thread': 1,
                     'temperature': 0.2,
                     'top_k': 30,
