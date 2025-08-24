@@ -1372,7 +1372,7 @@ class AutonomousDoctor:
         """Consult AI for complex decisions"""
         try:
             prompt = f"""Analyze this system health data and suggest the most appropriate action:
-            {context}[:1000]
+            {context}[:75]
             
             Respond with JSON only: {{"action": "action_name", "target": "optional_target", "reason": "explanation"}}
             Available actions: clear_cache, throttle_cpu, clean_logs, restart_failed_services, optimize_network, manage_services, increase_security, ban_ip, none"""
@@ -1382,10 +1382,16 @@ class AutonomousDoctor:
                 "model": MODEL,
                 "prompt": prompt,
                 "stream": False,
-                "options": {
-                    "num_predict": 2,
-                    "num_thread": 2
-                }        
+                'options': {
+                    'num_predict': 8,
+                    'num_thread': 1,
+                    'temperature': 0.3,
+                    'top_k': 20,
+                    'top_p': 0.9,
+                    'stop': ['\n'],
+                    'repeat_penalty': 1.0
+                }
+     
              }
             
             response = requests.post(url, json=payload, timeout=8)

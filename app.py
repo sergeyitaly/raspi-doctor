@@ -461,10 +461,16 @@ def test_ollama():
                 "model": MODEL, 
                 'prompt': prompt,
                 'stream': False,
-                "options": {
-                    "num_predict": 2,
-                    "num_thread": 2
+                'options': {
+                    'num_predict': 8,
+                    'num_thread': 1,
+                    'temperature': 0.3,
+                    'top_k': 20,
+                    'top_p': 0.9,
+                    'stop': ['\n'],
+                    'repeat_penalty': 1.0
                 }
+
             },
             timeout=8
         )
