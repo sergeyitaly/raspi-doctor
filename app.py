@@ -452,7 +452,7 @@ def api_ollama_status():
 def test_ollama():
     try:
         data = request.get_json()
-        prompt = data.get('prompt', 'Hello')
+        prompt = data.get('prompt', 'Hello, how are you')
         
         response = requests.post(
             f'{OLLAMA_HOST}/api/generate',
@@ -461,11 +461,15 @@ def test_ollama():
                 'prompt': prompt,
                 'stream': False,
                 'options': {
-                    'num_predict': 100,
-                    'num_thread': 2,
-                    'temperature': 0.1,
-                    'top_p': 0.9,
-                    'stop': ['.', '!', '?', '\n']  # Stop at sentence endings
+                    'num_predict': 40,         
+                    'num_thread': 2,           
+                    'temperature': 0.1,        
+                    'top_k': 20,               
+                    'top_p': 0.7,              
+                    'stop': ['.', '!', '?', '\n'],
+                    'repeat_penalty': 1.1,     
+                    'batch_size': 512,         
+                    'seed': 42                 
                 }
             },
             timeout=45
