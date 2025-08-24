@@ -16,7 +16,7 @@ import hashlib
 import numpy as np
 from collections import deque
 import statistics
-from ollama_client import summarize_text
+from ollama_client import summarize_text, analyze_system_trends
 # Configuration
 CONFIG_FILE = Path("./config.yaml")
 LOG_DIR = Path("/var/log/ai_health")
@@ -1369,50 +1369,74 @@ class AutonomousDoctor:
             logger.error(f"Error logging action: {e}")
             
     def consult_ai(self, context: str) -> Optional[Dict]:
-        """Consult AI for complex decisions"""
+        """Consult AI for complex decisions - optimized for Raspberry Pi"""
         try:
-            prompt = f"""Analyze this system health data and suggest the most appropriate action:
-            {context}
+            # Extract only essential metrics from context
+            if isinstance(context, dict):
+                # If context is a dict, extract key metrics
+                short_context = {
+                    'cpu': context.get('cpu', {}).get('percent', 0),
+                    'memory': context.get('memory', {}).get('percent', 0), 
+                    'disk': context.get('disk', {}).get('percent', 0),
+                    'load': context.get('cpu', {}).get('load_15min', 0),
+                    'failed_services': context.get('services', {}).get('failed_count', 0)
+                }
+                context_str = json.dumps(short_context)
+            else:
+                # If context is string, extract numbers only
+                import re
+                numbers = re.findall(r'\b\d+\.?\d*\b', context)
+                context_str = f"Metrics: {', '.join(numbers[:5])}" if numbers else "No metrics found"
+
+            # Get trend analysis first (fast and efficient)
+            trend_analysis = analyze_system_trends()
             
-            Respond with JSON only: {{"action": "action_name", "target": "optional_target", "reason": "explanation"}}
-            Available actions: clear_cache, throttle_cpu, clean_logs, restart_failed_services, optimize_network, manage_services, increase_security, ban_ip, none"""
-            
+            prompt = f"""System: {context_str}
+            Trend: {trend_analysis}
+            Action: (clear_cache|throttle_cpu|clean_logs|restart_services|optimize_network|none)
+            JSON: {{"action":"","reason":""}}"""
+
             url = f"{OLLAMA_HOST}/api/generate"
             payload = {
                 "model": MODEL,
                 "prompt": prompt,
                 "stream": False,
-            "options": {
-                "num_predict": 120,
-                "num_thread": 1,
-                "temperature": 0.1,
-                "top_k": 20,
-                "top_p": 0.7,
-                "stop": ["}"],
-                "repeat_penalty": 1.1
+                "options": {
+                    "num_predict": 40,        # Reduced from 120
+                    "num_thread": 1,
+                    "temperature": 0.1,
+                    "top_k": 15,
+                    "top_p": 0.6,
+                    "stop": ["}"],
+                    "repeat_penalty": 1.1
+                }
             }
-     
-             }
             
-            response = requests.post(url, json=payload, timeout=80)
+            response = requests.post(url, json=payload, timeout=20)  # Reduced from 80
             response.raise_for_status()
             ai_response = response.json().get('response', '').strip()
             
             # Extract JSON from response
             try:
+                # Ensure valid JSON format
+                if not ai_response.endswith('}'):
+                    ai_response = ai_response + '}'
                 return json.loads(ai_response)
             except json.JSONDecodeError:
                 # Try to find JSON in the response
                 import re
                 json_match = re.search(r'\{.*\}', ai_response, re.DOTALL)
                 if json_match:
-                    return json.loads(json_match.group())
+                    json_str = json_match.group()
+                    if not json_str.endswith('}'):
+                        json_str = json_str + '}'
+                    return json.loads(json_str)
                 return None
                 
         except Exception as e:
             logger.error(f"AI consultation failed: {e}")
             return None
-
+    
     def enhanced_restart_failed_services(self):
         """Smart service restart with troubleshooting"""
         failed_services = self.run_command("systemctl --failed --no-legend | awk '{print $1}'")
@@ -1548,6 +1572,12 @@ Respond with JSON: {{"solution": "disable|stop|reinstall|investigate", "reason":
                 
         except Exception as e:
             logger.error(f"Learning system error: {e}")
+
+
+
+
+
+
 def main():
     """Main function"""
     # Ensure config directory exists

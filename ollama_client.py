@@ -291,7 +291,7 @@ def analyze_network_logs(log_content: str, max_chars=800):
                 "repeat_penalty": 1.1
             }
         }
-        data = safe_ollama_request(url, payload, timeout=15)
+        data = safe_ollama_request(url, payload, timeout=80)
         return data.get("response", "").strip()
         
     except Exception as e:
@@ -347,7 +347,7 @@ Action: (block_ips|harden_ssh|none)"""
                 "repeat_penalty": 1.1
             }
         }
-        data = safe_ollama_request(url, payload, timeout=12)
+        data = safe_ollama_request(url, payload, timeout=80)
         response = data.get("response", "").strip()
         
         # Ensure meaningful response
@@ -363,58 +363,35 @@ Action: (block_ips|harden_ssh|none)"""
         return f"Security scan incomplete: {str(e)}"
 
 def consult_ai_for_service_issue(service_name: str, logs: str, service_status: str):
-    """Consult AI for service troubleshooting with historical context"""
+    """Consult AI for service troubleshooting - optimized for Raspberry Pi"""
     
-    # Check if Ollama is available first
     if not check_ollama_health():
         return {
             "solution": "investigate",
-            "reason": "Ollama server is not available for AI consultation",
+            "reason": "AI unavailable",
             "confidence": "low",
-            "recommended_command": f"journalctl -u {service_name} --no-pager -n 50"
+            "recommended_command": f"journalctl -u {service_name} -n 20"
         }
     
-    # Get historical patterns for this service type
-    service_patterns = []
-    try:
-        conn = sqlite3.connect(KNOWLEDGE_DB)
-        cursor = conn.cursor()
-        cursor.execute('''
-        SELECT pattern_data, solution, success_rate, occurrence_count
-        FROM system_patterns 
-        WHERE pattern_type LIKE '%service%' 
-        ORDER BY occurrence_count DESC
-        LIMIT 5
-        ''')
-        
-        for row in cursor.fetchall():
-            pattern_data_blob, solution, success_rate, count = row
-            service_patterns.append({
-                'solution': solution,
-                'success_rate': success_rate,
-                'occurrence_count': count
-            })
-                
-        conn.close()
-    except Exception as e:
-        print(f"Error reading service patterns: {e}")
+    # Extract only critical log lines
+    critical_logs = []
+    for line in logs.split('\n'):
+        line_lower = line.lower()
+        if any(keyword in line_lower for keyword in 
+              ['error', 'fail', 'timeout', 'denied', 'cannot', 'unable']):
+            critical_logs.append(line[:60])
+            if len(critical_logs) >= 3:
+                break
     
-    prompt = textwrap.dedent(f"""
-    Analyze this service failure:
-
-    Service: {service_name}
-    Status: {service_status}
-    Logs: {logs[:1500]}
+    if not critical_logs:
+        critical_logs = ["No critical errors in logs"]
     
-    Based on the symptoms, recommend the best course of action.
-    
-    Respond with JSON: {{
-        "solution": "disable|stop|restart|reinstall|investigate|custom_command",
-        "reason": "detailed explanation",
-        "confidence": "high|medium|low",
-        "recommended_command": "specific command to execute"
-    }}
-    """)
+    # Ultra-concise prompt
+    prompt = f"""Service: {service_name}
+Status: {service_status}
+Errors: {' | '.join(critical_logs)}
+Action: (restart|stop|disable|investigate|reinstall)
+JSON: {{"solution":"","reason":"","confidence":"","command":""}}"""
     
     try:
         url = f"{OLLAMA_HOST}/api/generate"
@@ -423,108 +400,101 @@ def consult_ai_for_service_issue(service_name: str, logs: str, service_status: s
             "prompt": prompt, 
             'stream': False,
             "options": {
-                "num_predict": 120,
+                "num_predict": 40,        # Reduced from 120
                 "num_thread": 1,
                 "temperature": 0.1,
-                "top_k": 20,
-                "top_p": 0.7,
+                "top_k": 15,
+                "top_p": 0.6,
                 "stop": ["}"],
                 "repeat_penalty": 1.1
             }
         }
-        data = safe_ollama_request(url, payload, timeout=80)
+        data = safe_ollama_request(url, payload, timeout=15)  # Reduced from 80
         response_text = data.get("response", "").strip()
         
-        # Try to extract JSON from response
-        try:
-            import re
-            json_match = re.search(r'\{.*\}', response_text, re.DOTALL)
-            if json_match:
-                return json.loads(json_match.group())
-            else:
-                return {
-                    "solution": "investigate",
-                    "reason": "Could not parse AI response as JSON",
-                    "confidence": "low",
-                    "recommended_command": f"journalctl -u {service_name} --no-pager -n 50"
-                }
-        except json.JSONDecodeError:
-            return {
-                "solution": "investigate",
-                "reason": "AI response format error",
-                "confidence": "low",
-                "recommended_command": f"journalctl -u {service_name} --no-pager -n 50"
-            }
-            
-    except Exception as e:
+        # Extract JSON
+        import re
+        json_match = re.search(r'\{.*\}', response_text, re.DOTALL)
+        if json_match:
+            result = json.loads(json_match.group())
+            # Validate required fields
+            if all(k in result for k in ["solution", "reason", "confidence"]):
+                return result
+        
+        # Fallback if JSON parsing fails
         return {
-            "solution": "investigate",
-            "reason": f"AI consultation failed: {str(e)}",
-            "confidence": "low",
-            "recommended_command": f"systemctl status {service_name} --no-pager"
+            "solution": "restart" if "active" not in service_status else "investigate",
+            "reason": "Service issue detected",
+            "confidence": "medium",
+            "recommended_command": f"sudo systemctl restart {service_name}"
         }
-
+            
+    except Exception:
+        return {
+            "solution": "restart",
+            "reason": "AI consultation timed out",
+            "confidence": "low", 
+            "recommended_command": f"sudo systemctl restart {service_name}"
+        }
+    
 def analyze_system_trends():
-    """Generate comprehensive trend analysis using historical data"""
+    """Fast trend analysis for Raspberry Pi"""
     
-    # Check if Ollama is available first
     if not check_ollama_health():
-        return "Trend analysis unavailable: Ollama server is not responding"
+        return "Trend analysis: AI unavailable"
     
-    trends = get_metric_trends(hours=168)
-    patterns = get_system_patterns_from_db(hours=168)
-    outcomes = get_recent_action_outcomes(hours=168)
+    # Get only essential metrics
+    essential_metrics = {}
+    try:
+        conn = sqlite3.connect(KNOWLEDGE_DB)
+        cursor = conn.cursor()
+        
+        # Get only 3 key metrics
+        for metric in ['cpu_percent', 'memory_percent', 'load_15min']:
+            cursor.execute('''
+            SELECT metric_value, timestamp FROM long_term_metrics 
+            WHERE metric_name = ? 
+            ORDER BY timestamp DESC LIMIT 10
+            ''', (metric,))
+            results = cursor.fetchall()
+            if results:
+                values = [r[0] for r in results]
+                essential_metrics[metric] = {
+                    'current': values[0],
+                    'trend': 'up' if len(values) > 1 and values[0] > values[-1] else 'down'
+                }
+                
+        conn.close()
+    except Exception:
+        essential_metrics = {"error": "Could not load metrics"}
     
-    prompt = textwrap.dedent("""
-    Analyze long-term system trends and patterns to identify:
-    
-    1. Recurring issues and their patterns
-    2. Seasonal or time-based trends
-    3. Effectiveness of previous actions
-    4. Emerging problems before they become critical
-    5. Optimization opportunities
-    
-    Provide a weekly trend report with:
-    - Overall system health trend
-    - Most common recurring issues
-    - Most effective remediation actions
-    - Predictions for upcoming issues
-    - Long-term optimization recommendations
-    """)
-    
-    context = f"""
-    === WEEKLY TREND DATA ===
-    Metrics: {json.dumps(trends, indent=2, default=str)}
-    
-    === RECURRING PATTERNS ===
-    {json.dumps(patterns, indent=2, default=str)}
-    
-    === ACTION EFFECTIVENESS ===
-    {json.dumps(outcomes, indent=2, default=str)}
-    """
-    
-    full_prompt = f"{prompt}\n\n{context}"
+    # Ultra-short prompt
+    prompt = f"""System trends: {json.dumps(essential_metrics)}
+    Summary: (improving|stable|degrading)
+    Recommendation: (monitor|optimize|investigate)"""
     
     try:
         url = f"{OLLAMA_HOST}/api/generate"
         payload = {
             "model": MODEL, 
-            "prompt": full_prompt, 
+            "prompt": prompt, 
             'stream': False,
             "options": {
-                "num_predict": 120,
+                "num_predict": 30,        # Very short response
                 "num_thread": 1,
                 "temperature": 0.1,
-                "top_k": 20,
-                "top_p": 0.7,
-                "stop": ["}"],
+                "top_k": 15,
+                "top_p": 0.6,
+                "stop": ["\n"],
                 "repeat_penalty": 1.1
             }
         }
-        data = safe_ollama_request(url, payload, timeout=80)
+        data = safe_ollama_request(url, payload, timeout=12)
         return data.get("response", "").strip()
+        
     except Exception as e:
-        return f"Trend analysis failed: {str(e)}"
+        return f"Trend analysis: Error - {str(e)}"
+    
 
 # Test function
 def test_connection():
