@@ -10,7 +10,7 @@ from pathlib import Path
 import subprocess
 import requests
 
-from ollama_client import summarize_text
+from ollama_client import summarize_text, analyze_network_logs, analyze_security_logs
 from enhanced_doctor import AutonomousDoctor, KnowledgeBase
 
 # Initialize Flask app
@@ -267,60 +267,74 @@ def api_network():
         if not path.exists():
             return jsonify({"summary": "No network log file found."})
         
-        log_content = path.read_text()[-2000:]  # Reduced from 5000
+        # Read only recent logs
+        log_content = path.read_text()[-1000:]  # Further reduced
+        
         if not log_content.strip():
-            return jsonify({"summary": "No recent network data available."})
+            return jsonify({"summary": "No recent network data."})
             
-        try:
-            # Use the faster specialized analysis
-            from ollama_client import analyze_network_logs
-            summary = analyze_network_logs(log_content)
-            return jsonify({"summary": summary})
-        except Exception as e:
-            return jsonify({"summary": f"Network analysis error: {e}"})
+        # Use the optimized analysis
+        summary = analyze_network_logs(log_content)
+        
+        # Clean up generic responses
+        if summary.startswith("Sure, here's") or summary.startswith("Certainly"):
+            summary = "Network analysis: " + summary.split('\n', 1)[-1][:200]
+            
+        return jsonify({"summary": summary})
+        
     except Exception as e:
         return jsonify({"summary": f"Network analysis failed: {e}"})
-
+    
 @app.route("/api/security")
 def api_security():
     try:
-        auth_log = ""
-        ufw_log = ""
+        # Read only the most critical recent entries
+        security_data = []
         
-        # Read only recent entries
+        # Auth log - only failed logins and suspicious activity
         if Path("/var/log/auth.log").exists():
             try:
-                # Use tail command for efficiency
                 auth_log = subprocess.run(
-                    ["tail", "-n", "100", "/var/log/auth.log"],
-                    capture_output=True, text=True, timeout=10
+                    ["grep", "-i", "failed\\|invalid\\|authentication failure", "/var/log/auth.log", "|", "tail", "-n", "20"],
+                    capture_output=True, text=True, timeout=8
                 ).stdout
+                if auth_log:
+                    security_data.append(f"AUTH LOG:\n{auth_log}")
             except:
-                auth_log = ""
+                pass
         
+        # UFW log - only block/drop events
         if Path("/var/log/ufw.log").exists():
             try:
                 ufw_log = subprocess.run(
-                    ["tail", "-n", "50", "/var/log/ufw.log"],
-                    capture_output=True, text=True, timeout=10
+                    ["grep", "-i", "block\\|drop\\|denied", "/var/log/ufw.log", "|", "tail", "-n", "15"],
+                    capture_output=True, text=True, timeout=8
                 ).stdout
+                if ufw_log:
+                    security_data.append(f"FIREWALL LOG:\n{ufw_log}")
             except:
-                ufw_log = ""
+                pass
             
-        context = auth_log + "\n" + ufw_log
-        if not context.strip():
-            return jsonify({"report": "No recent security logs available."})
+        if not security_data:
+            return jsonify({"report": "No critical security events in recent logs."})
             
-        try:
-            # Use the faster specialized analysis
-            from ollama_client import analyze_security_logs
-            report = analyze_security_logs(context)
-            return jsonify({"report": report})
-        except Exception as e:
-            return jsonify({"report": f"Security analysis error: {e}"})
+        context = "\n---\n".join(security_data)[:800]  # Hard limit
+        
+        # Use optimized analysis
+        report = analyze_security_logs(context)
+        
+        # Clean up generic responses
+        if report.startswith(("Sure,", "Certainly", "Here's")):
+            # Extract only the actionable part
+            lines = report.split('\n')
+            if len(lines) > 2:
+                report = '\n'.join([line for line in lines if not line.startswith(('Sure,', 'Certainly', 'Here'))])
+        
+        return jsonify({"report": report[:500]})  # Limit response length
+        
     except Exception as e:
         return jsonify({"error": f"Security analysis failed: {str(e)}"}), 500
-
+    
 @app.route("/api/summary")
 def api_summary():
     try:

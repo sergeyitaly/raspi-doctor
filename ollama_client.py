@@ -255,85 +255,112 @@ def summarize_text(text: str, prompt: str = None, max_chars=6000):
     except Exception as e:
         return f"Error consulting AI: {str(e)}"
 
-def analyze_network_logs(log_content: str, max_chars=2000):
-    """Fast network analysis with reduced context"""
-    # Check if Ollama is available first
+def analyze_network_logs(log_content: str, max_chars=800):
+    """Ultra-optimized network analysis for Raspberry Pi"""
     if not check_ollama_health():
-        return "Network analysis unavailable: Ollama server is not responding"
+        return "Ollama unavailable"
     
-    log_content = log_content[-max_chars:] if len(log_content) > max_chars else log_content
+    # Filter for ONLY the most critical lines
+    critical_issues = []
+    keywords = ['error', 'fail', 'timeout', 'drop', 'loss', 'denied', 'block', 'refused']
     
-    prompt = textwrap.dedent("""
-    Analyze these network logs briefly. Focus on:
-    - Connection stability issues
-    - High latency or packet loss
-    - Security concerns
-    - 2-3 key recommendations
+    for line in log_content.split('\n'):
+        if any(keyword in line.lower() for keyword in keywords):
+            critical_issues.append(line[:60])  # Very short lines
+            if len(critical_issues) >= 3:      # Only 3 most critical
+                break
     
-    Respond with 1-2 paragraphs maximum.
-    """)
+    if not critical_issues:
+        return "No critical network issues found"
+    
+    # Ultra-short prompt
+    prompt = f"Net issues: {' | '.join(critical_issues)}. Fix:"
     
     try:
-        fullprompt= f"{prompt}\n\n--- NETWORK LOGS ---\n{log_content}"
-        url = f"{OLLAMA_HOST}/api/generate"
         payload = {
             "model": MODEL, 
-            "prompt": fullprompt,
+            "prompt": prompt,
             'stream': False,
             "options": {
-                "num_predict": 120,
+                "num_predict": 60,        
                 "num_thread": 1,
                 "temperature": 0.1,
-                "top_k": 20,
-                "top_p": 0.7,
-                "stop": ["\n\n"],
+                "top_k": 15,
+                "top_p": 0.6,
+                "stop": ["\n"],
                 "repeat_penalty": 1.1
             }
         }
-        data = safe_ollama_request(url, payload, timeout=80)
+        data = safe_ollama_request(url, payload, timeout=15)
         return data.get("response", "").strip()
+        
     except Exception as e:
-        return f"Network analysis unavailable: {str(e)}"
+        return f"Analysis failed: {e}"
 
-def analyze_security_logs(log_content: str, max_chars=2000):
-    """Fast security analysis with reduced context"""
-    # Check if Ollama is available first
+def analyze_security_logs(log_content: str, max_chars=600):
+    """Ultra-fast security analysis for Raspberry Pi"""
     if not check_ollama_health():
-        return "Security analysis unavailable: Ollama server is not responding"
+        return "Security monitor: Ollama unavailable"
     
-    log_content = log_content[-max_chars:] if len(log_content) > max_chars else log_content
+    # Extract only critical information
+    critical_events = []
+    ip_attempts = {}
     
-    prompt = textwrap.dedent("""
-    Analyze these security logs briefly. Focus on:
-    - Failed login attempts
-    - Suspicious IP addresses
-    - Firewall/UFW events
-    - Critical security recommendations
+    # Count failed attempts by IP
+    for line in log_content.split('\n'):
+        if 'fail' in line.lower() or 'invalid' in line.lower():
+            # Extract IP addresses from failed attempts
+            import re
+            ip_match = re.search(r'\b(?:[0-9]{1,3}\.){3}[0-9]{1,3}\b', line)
+            if ip_match:
+                ip = ip_match.group()
+                ip_attempts[ip] = ip_attempts.get(ip, 0) + 1
+            critical_events.append(line[:60])  # Short lines only
     
-    Respond with 1-2 paragraphs maximum.
-    """)
+    # Create concise summary
+    if ip_attempts:
+        top_ips = sorted(ip_attempts.items(), key=lambda x: x[1], reverse=True)[:3]
+        ip_summary = ", ".join([f"{ip}({count})" for ip, count in top_ips])
+    else:
+        ip_summary = "none"
+    
+    critical_count = len(critical_events)
+    sample_events = "\n".join(critical_events[:3]) if critical_events else "none"
+    
+    prompt = f"""Security alert: {critical_count} events, top IPs: {ip_summary}
+Sample: {sample_events}
+Action: (block_ips|harden_ssh|none)"""
     
     try:
         url = f"{OLLAMA_HOST}/api/generate"
-
         payload = {
             "model": MODEL, 
-            "prompt": f"{prompt}\n\n--- SECURITY LOGS ---\n{log_content}",
+            "prompt": prompt,
             'stream': False,
             "options": {
-                "num_predict": 120,
+                "num_predict": 40,        # Very short response
                 "num_thread": 1,
                 "temperature": 0.1,
-                "top_k": 20,
-                "top_p": 0.7,
-                "stop": ["\n\n"],
+                "top_k": 15,
+                "top_p": 0.6,
+                "stop": ["\n"],
                 "repeat_penalty": 1.1
             }
         }
-        data = safe_ollama_request(url, payload, timeout=20)
-        return data.get("response", "").strip()
+        data = safe_ollama_request(url, payload, timeout=12)
+        response = data.get("response", "").strip()
+        
+        # Ensure meaningful response
+        if not response or response.lower() in ['none', 'no', 'n/a']:
+            if critical_count > 0:
+                return f"Security: {critical_count} events detected. Top IPs: {ip_summary}"
+            else:
+                return "No critical security events detected"
+                
+        return response
+        
     except Exception as e:
-        return f"Security analysis unavailable: {str(e)}"
+        return f"Security scan incomplete: {str(e)}"
 
 def consult_ai_for_service_issue(service_name: str, logs: str, service_status: str):
     """Consult AI for service troubleshooting with historical context"""
