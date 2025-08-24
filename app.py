@@ -462,7 +462,7 @@ def test_ollama():
                 'prompt': prompt,
                 'stream': False,
                 'options': {
-                    'num_predict': 500,
+                    'num_predict': 100,
                     'num_thread': 1,
                     'temperature': 0.2,
                     'top_k': 30,
