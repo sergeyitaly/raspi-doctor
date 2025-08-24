@@ -1382,19 +1382,19 @@ class AutonomousDoctor:
                 "model": MODEL,
                 "prompt": prompt[:150],
                 "stream": False,
-                'options': {
-                    'num_predict': 300,
-                    'num_thread': 1,
-                    'temperature': 0.2,
-                    'top_k': 30,
-                    'top_p': 0.8,
-                    'stop': ['\n\n\n\n\n'],
-                    'repeat_penalty': 1.1
+                "options": {
+                    "num_predict": 60,
+                    "num_thread": 1,
+                    "temperature": 0.1,
+                    "top_k": 20,
+                    "top_p": 0.7,
+                    "stop": ["\n\n\n", "."],
+                    "repeat_penalty": 1.1
                 }
      
              }
             
-            response = requests.post(url, json=payload, timeout=80)
+            response = requests.post(url, json=payload, timeout=20)
             response.raise_for_status()
             ai_response = response.json().get('response', '').strip()
             
