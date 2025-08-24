@@ -1382,8 +1382,18 @@ class AutonomousDoctor:
                 "model": MODEL,
                 "prompt": prompt,
                 "stream": False,
-                "options": {"temperature": 0.1}
-            }
+                'options': {
+                    'num_predict': 300,         
+                    'num_thread': 2,           
+                    'temperature': 0.1,        
+                    'top_k': 20,               
+                    'top_p': 0.7,              
+                    'stop': ['.', '!', '?', '\n'],
+                    'repeat_penalty': 1.1,     
+                    'batch_size': 512,         
+                    'seed': 42                 
+                }           
+             }
             
             response = requests.post(url, json=payload, timeout=60)
             response.raise_for_status()
