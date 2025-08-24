@@ -240,15 +240,15 @@ def summarize_text(text: str, prompt: str = None, max_chars=6000):
             "model": MODEL, 
             "prompt": full_prompt[:150], 
             'stream': False,
-  "options": {
-    "num_predict": 60,
-    "num_thread": 1,
-    "temperature": 0.1,
-    "top_k": 20,
-    "top_p": 0.7,
-    "stop": ["\n\n\n", "."],
-    "repeat_penalty": 1.1
-  }
+            "options": {
+                "num_predict": 300,
+                "num_thread": 1,
+                "temperature": 0.1,
+                "top_k": 20,
+                "top_p": 0.7,
+                "stop": ["\n\n", "##"],
+                "repeat_penalty": 1.1
+            }
         }
         data = safe_ollama_request(url, payload, timeout=20)
         return data.get("response", "").strip()
@@ -280,15 +280,15 @@ def analyze_network_logs(log_content: str, max_chars=2000):
             "model": MODEL, 
             "prompt": fullprompt[:150],
             'stream': False,
-  "options": {
-    "num_predict": 60,
-    "num_thread": 1,
-    "temperature": 0.1,
-    "top_k": 20,
-    "top_p": 0.7,
-    "stop": ["\n\n\n", "."],
-    "repeat_penalty": 1.1
-  }
+            "options": {
+                "num_predict": 300,
+                "num_thread": 1,
+                "temperature": 0.1,
+                "top_k": 20,
+                "top_p": 0.7,
+                "stop": ["\n\n", "##"],
+                "repeat_penalty": 1.1
+            }
         }
         data = safe_ollama_request(url, payload, timeout=20)
         return data.get("response", "").strip()
@@ -320,15 +320,15 @@ def analyze_security_logs(log_content: str, max_chars=2000):
             "model": MODEL, 
             "prompt": f"{prompt}\n\n--- SECURITY LOGS ---\n{log_content}"[:150],
             'stream': False,
-  "options": {
-    "num_predict": 60,
-    "num_thread": 1,
-    "temperature": 0.1,
-    "top_k": 20,
-    "top_p": 0.7,
-    "stop": ["\n\n\n", "."],
-    "repeat_penalty": 1.1
-  }
+            "options": {
+                "num_predict": 300,
+                "num_thread": 1,
+                "temperature": 0.1,
+                "top_k": 20,
+                "top_p": 0.7,
+                "stop": ["\n\n", "##"],
+                "repeat_penalty": 1.1
+            }
         }
         data = safe_ollama_request(url, payload, timeout=20)
         return data.get("response", "").strip()
@@ -396,12 +396,12 @@ def consult_ai_for_service_issue(service_name: str, logs: str, service_status: s
             "prompt": prompt[:150], 
             'stream': False,
             "options": {
-                "num_predict": 60,
+                "num_predict": 300,
                 "num_thread": 1,
                 "temperature": 0.1,
                 "top_k": 20,
                 "top_p": 0.7,
-                "stop": ["\n\n\n", "."],
+                "stop": ["\n\n", "##"],
                 "repeat_penalty": 1.1
             }
         }
@@ -484,15 +484,15 @@ def analyze_system_trends():
             "model": MODEL, 
             "prompt": full_prompt[:150], 
             'stream': False,
-  "options": {
-    "num_predict": 60,
-    "num_thread": 1,
-    "temperature": 0.1,
-    "top_k": 20,
-    "top_p": 0.7,
-    "stop": ["\n\n\n", "."],
-    "repeat_penalty": 1.1
-  }
+            "options": {
+                "num_predict": 300,
+                "num_thread": 1,
+                "temperature": 0.1,
+                "top_k": 20,
+                "top_p": 0.7,
+                "stop": ["\n\n", "##"],
+                "repeat_penalty": 1.1
+            }
         }
         data = safe_ollama_request(url, payload, timeout=20)
         return data.get("response", "").strip()
