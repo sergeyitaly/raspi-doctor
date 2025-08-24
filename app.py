@@ -9,7 +9,6 @@ from datetime import datetime, timedelta
 from pathlib import Path
 import subprocess
 import requests
-OLLAMA_HOST = os.getenv("OLLAMA_HOST", "http://127.0.0.1:11434")
 
 from ollama_client import summarize_text
 from enhanced_doctor import AutonomousDoctor, KnowledgeBase
@@ -19,6 +18,8 @@ app = Flask(__name__)
 
 LOG_FILE = Path("/var/log/ai_health/health.log")
 LOG_DIR = Path("/var/log/ai_health")
+MODEL = os.getenv("OLLAMA_MODEL", "tinyllama")
+OLLAMA_HOST = os.getenv("OLLAMA_HOST", "http://127.0.0.1:11434")
 
 # Global doctor instance
 doctor = None
@@ -457,16 +458,21 @@ def test_ollama():
         response = requests.post(
             f'{OLLAMA_HOST}/api/generate',
             json={
-                'model': 'tinyllama',
+                "model": MODEL, 
                 'prompt': prompt,
                 'stream': False,
                 'options': {
-                    'num_predict': 200,        
-                    'num_thread': 2,           
-                    'temperature': 0.1,        
-                    'top_p': 0.9,              
-                    'stop': ['.', '!', '?']    
-                } 
+                    'num_predict': 100,
+                    'num_thread': 2,
+                    'temperature': 0.3,        # Slightly higher for creative solutions
+                    'top_k': 30,
+                    'top_p': 0.75,
+                    'stop': ['\n\n', '###', 'Next step:'],
+                    'repeat_penalty': 1.1,
+                    'mirostat': 1,             # For better solution quality
+                    'mirostat_tau': 4.0,
+                    'seed': 42
+                }
             },
             timeout=45
         )
