@@ -241,12 +241,8 @@ def summarize_text(text: str, prompt: str = None, max_chars=6000):
             "prompt": full_prompt[:1000], 
             'stream': False,
                 "options": {
-                    "num_predict": 6,
-                    "num_thread": 1,
-                    "temperature": 0.2,
-                    "top_k": 6,
-                    "top_p": 0.4,
-                    "stop": ["\n"]
+                    "num_predict": 2,
+                    "num_thread": 2
                 }
         }
         data = safe_ollama_request(url, payload, timeout=8)
@@ -280,12 +276,8 @@ def analyze_network_logs(log_content: str, max_chars=2000):
             "prompt": fullprompt[:1000],
             'stream': False,
                 "options": {
-                    "num_predict": 6,
-                    "num_thread": 1,
-                    "temperature": 0.2,
-                    "top_k": 6,
-                    "top_p": 0.4,
-                    "stop": ["\n"]
+                    "num_predict": 2,
+                    "num_thread": 2
                 }
         }
         data = safe_ollama_request(url, payload, timeout=8)
@@ -319,12 +311,8 @@ def analyze_security_logs(log_content: str, max_chars=2000):
             "prompt": f"{prompt}\n\n--- SECURITY LOGS ---\n{log_content}"[:1000],
             'stream': False,
                 "options": {
-                    "num_predict": 6,
-                    "num_thread": 1,
-                    "temperature": 0.2,
-                    "top_k": 6,
-                    "top_p": 0.4,
-                    "stop": ["\n"]
+                    "num_predict": 2,
+                    "num_thread": 2
                 }
         }
         data = safe_ollama_request(url, payload, timeout=8)
@@ -393,12 +381,8 @@ def consult_ai_for_service_issue(service_name: str, logs: str, service_status: s
             "prompt": prompt[:1000], 
             'stream': False,
                 "options": {
-                    "num_predict": 6,
-                    "num_thread": 1,
-                    "temperature": 0.2,
-                    "top_k": 6,
-                    "top_p": 0.4,
-                    "stop": ["\n"]
+                    "num_predict": 2,
+                    "num_thread": 2
                 }
         }
         data = safe_ollama_request(url, payload, timeout=8)
@@ -481,12 +465,8 @@ def analyze_system_trends():
             "prompt": full_prompt[:1000], 
             'stream': False,
                 "options": {
-                    "num_predict": 6,
-                    "num_thread": 1,
-                    "temperature": 0.2,
-                    "top_k": 6,
-                    "top_p": 0.4,
-                    "stop": ["\n"]
+                    "num_predict": 2,
+                    "num_thread": 2
                 }
         }
         data = safe_ollama_request(url, payload, timeout=8)

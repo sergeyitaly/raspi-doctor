@@ -462,12 +462,8 @@ def test_ollama():
                 'prompt': prompt,
                 'stream': False,
                 "options": {
-                    "num_predict": 6,
-                    "num_thread": 1,
-                    "temperature": 0.2,
-                    "top_k": 6,
-                    "top_p": 0.4,
-                    "stop": ["\n"]
+                    "num_predict": 2,
+                    "num_thread": 2
                 }
             },
             timeout=8
