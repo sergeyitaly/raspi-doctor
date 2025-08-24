@@ -1372,7 +1372,7 @@ class AutonomousDoctor:
         """Consult AI for complex decisions"""
         try:
             prompt = f"""Analyze this system health data and suggest the most appropriate action:
-            {context}[:500]
+            {context}
             
             Respond with JSON only: {{"action": "action_name", "target": "optional_target", "reason": "explanation"}}
             Available actions: clear_cache, throttle_cpu, clean_logs, restart_failed_services, optimize_network, manage_services, increase_security, ban_ip, none"""
@@ -1380,21 +1380,21 @@ class AutonomousDoctor:
             url = f"{OLLAMA_HOST}/api/generate"
             payload = {
                 "model": MODEL,
-                "prompt": prompt,
+                "prompt": prompt[:150],
                 "stream": False,
                 'options': {
-                    'num_predict': 100,
+                    'num_predict': 300,
                     'num_thread': 1,
                     'temperature': 0.2,
                     'top_k': 30,
                     'top_p': 0.8,
-                    'stop': ['\n\n'],
+                    'stop': ['\n\n\n\n\n'],
                     'repeat_penalty': 1.1
                 }
      
              }
             
-            response = requests.post(url, json=payload, timeout=25)
+            response = requests.post(url, json=payload, timeout=80)
             response.raise_for_status()
             ai_response = response.json().get('response', '').strip()
             

@@ -459,10 +459,10 @@ def test_ollama():
             f'{OLLAMA_HOST}/api/generate',
             json={
                 "model": MODEL, 
-                'prompt': prompt,
+                'prompt': prompt[:150],
                 'stream': False,
                 'options': {
-                    'num_predict': 100,
+                    'num_predict': 300,
                     'num_thread': 1,
                     'temperature': 0.2,
                     'top_k': 30,
