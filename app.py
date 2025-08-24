@@ -462,7 +462,7 @@ def test_ollama():
                 'prompt': prompt,
                 'stream': False,
                 "options": {
-                    "num_predict": 16,
+                    "num_predict": 6,
                     "num_thread": 1,
                     "temperature": 0.2,
                     "top_k": 6,
@@ -470,7 +470,7 @@ def test_ollama():
                     "stop": ["\n"]
                 }
             },
-            timeout=10
+            timeout=8
         )
         
         if response.status_code == 200:

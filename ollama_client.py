@@ -15,7 +15,7 @@ OLLAMA_TIMEOUT = int(os.getenv("OLLAMA_TIMEOUT", "120"))  # Default 120 seconds
 def check_ollama_health():
     """Check if Ollama server is healthy"""
     try:
-        response = requests.get(f"{OLLAMA_HOST}/api/tags", timeout=10)
+        response = requests.get(f"{OLLAMA_HOST}/api/tags", timeout=8)
         return response.status_code == 200
     except (requests.ConnectionError, requests.Timeout):
         return False
@@ -241,7 +241,7 @@ def summarize_text(text: str, prompt: str = None, max_chars=6000):
             "prompt": full_prompt[:1000], 
             'stream': False,
                 "options": {
-                    "num_predict": 16,
+                    "num_predict": 6,
                     "num_thread": 1,
                     "temperature": 0.2,
                     "top_k": 6,
@@ -249,7 +249,7 @@ def summarize_text(text: str, prompt: str = None, max_chars=6000):
                     "stop": ["\n"]
                 }
         }
-        data = safe_ollama_request(url, payload, timeout=10)
+        data = safe_ollama_request(url, payload, timeout=8)
         return data.get("response", "").strip()
     except Exception as e:
         return f"Error consulting AI: {str(e)}"
@@ -280,7 +280,7 @@ def analyze_network_logs(log_content: str, max_chars=2000):
             "prompt": fullprompt[:1000],
             'stream': False,
                 "options": {
-                    "num_predict": 16,
+                    "num_predict": 6,
                     "num_thread": 1,
                     "temperature": 0.2,
                     "top_k": 6,
@@ -288,7 +288,7 @@ def analyze_network_logs(log_content: str, max_chars=2000):
                     "stop": ["\n"]
                 }
         }
-        data = safe_ollama_request(url, payload, timeout=10)
+        data = safe_ollama_request(url, payload, timeout=8)
         return data.get("response", "").strip()
     except Exception as e:
         return f"Network analysis unavailable: {str(e)}"
@@ -319,7 +319,7 @@ def analyze_security_logs(log_content: str, max_chars=2000):
             "prompt": f"{prompt}\n\n--- SECURITY LOGS ---\n{log_content}"[:1000],
             'stream': False,
                 "options": {
-                    "num_predict": 16,
+                    "num_predict": 6,
                     "num_thread": 1,
                     "temperature": 0.2,
                     "top_k": 6,
@@ -327,7 +327,7 @@ def analyze_security_logs(log_content: str, max_chars=2000):
                     "stop": ["\n"]
                 }
         }
-        data = safe_ollama_request(url, payload, timeout=10)
+        data = safe_ollama_request(url, payload, timeout=8)
         return data.get("response", "").strip()
     except Exception as e:
         return f"Security analysis unavailable: {str(e)}"
@@ -393,7 +393,7 @@ def consult_ai_for_service_issue(service_name: str, logs: str, service_status: s
             "prompt": prompt[:1000], 
             'stream': False,
                 "options": {
-                    "num_predict": 16,
+                    "num_predict": 6,
                     "num_thread": 1,
                     "temperature": 0.2,
                     "top_k": 6,
@@ -401,7 +401,7 @@ def consult_ai_for_service_issue(service_name: str, logs: str, service_status: s
                     "stop": ["\n"]
                 }
         }
-        data = safe_ollama_request(url, payload, timeout=10)
+        data = safe_ollama_request(url, payload, timeout=8)
         response_text = data.get("response", "").strip()
         
         # Try to extract JSON from response
@@ -481,7 +481,7 @@ def analyze_system_trends():
             "prompt": full_prompt[:1000], 
             'stream': False,
                 "options": {
-                    "num_predict": 16,
+                    "num_predict": 6,
                     "num_thread": 1,
                     "temperature": 0.2,
                     "top_k": 6,
@@ -489,7 +489,7 @@ def analyze_system_trends():
                     "stop": ["\n"]
                 }
         }
-        data = safe_ollama_request(url, payload, timeout=10)
+        data = safe_ollama_request(url, payload, timeout=8)
         return data.get("response", "").strip()
     except Exception as e:
         return f"Trend analysis failed: {str(e)}"
