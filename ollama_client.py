@@ -246,7 +246,6 @@ def summarize_text(text: str, prompt: str = None, max_chars=6000):
                     "temperature": 0.2,
                     "top_k": 6,
                     "top_p": 0.4,
-                    "batch_size": 64,
                     "stop": ["\n"]
                 }
         }
@@ -285,7 +284,6 @@ def analyze_network_logs(log_content: str, max_chars=2000):
                     "temperature": 0.2,
                     "top_k": 6,
                     "top_p": 0.4,
-                    "batch_size": 64,
                     "stop": ["\n"]
                 }
         }
@@ -324,7 +322,6 @@ def analyze_security_logs(log_content: str, max_chars=2000):
                     "temperature": 0.2,
                     "top_k": 6,
                     "top_p": 0.4,
-                    "batch_size": 64,
                     "stop": ["\n"]
                 }
         }
@@ -399,7 +396,6 @@ def consult_ai_for_service_issue(service_name: str, logs: str, service_status: s
                     "temperature": 0.2,
                     "top_k": 6,
                     "top_p": 0.4,
-                    "batch_size": 64,
                     "stop": ["\n"]
                 }
         }
@@ -488,7 +484,6 @@ def analyze_system_trends():
                     "temperature": 0.2,
                     "top_k": 6,
                     "top_p": 0.4,
-                    "batch_size": 64,
                     "stop": ["\n"]
                 }
         }

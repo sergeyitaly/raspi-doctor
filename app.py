@@ -467,7 +467,6 @@ def test_ollama():
                     "temperature": 0.2,
                     "top_k": 6,
                     "top_p": 0.4,
-                    "batch_size": 64,
                     "stop": ["\n"]
                 }
             },
