@@ -1383,18 +1383,18 @@ class AutonomousDoctor:
                 "prompt": prompt,
                 "stream": False,
                 'options': {
-                    'num_predict': 8,
+                    'num_predict': 200,
                     'num_thread': 1,
-                    'temperature': 0.3,
-                    'top_k': 20,
-                    'top_p': 0.9,
-                    'stop': ['\n'],
-                    'repeat_penalty': 1.0
+                    'temperature': 0.2,
+                    'top_k': 30,
+                    'top_p': 0.8,
+                    'stop': ['\n\n'],
+                    'repeat_penalty': 1.1
                 }
      
              }
             
-            response = requests.post(url, json=payload, timeout=8)
+            response = requests.post(url, json=payload, timeout=25)
             response.raise_for_status()
             ai_response = response.json().get('response', '').strip()
             

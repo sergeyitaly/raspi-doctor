@@ -462,17 +462,17 @@ def test_ollama():
                 'prompt': prompt,
                 'stream': False,
                 'options': {
-                    'num_predict': 8,
+                    'num_predict': 200,
                     'num_thread': 1,
-                    'temperature': 0.3,
-                    'top_k': 20,
-                    'top_p': 0.9,
-                    'stop': ['\n'],
-                    'repeat_penalty': 1.0
+                    'temperature': 0.2,
+                    'top_k': 30,
+                    'top_p': 0.8,
+                    'stop': ['\n\n'],
+                    'repeat_penalty': 1.1
                 }
 
             },
-            timeout=8
+            timeout=25
         )
         
         if response.status_code == 200:
