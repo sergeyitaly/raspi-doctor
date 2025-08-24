@@ -454,7 +454,6 @@ def test_ollama():
         data = request.get_json()
         prompt = data.get('prompt', 'Hello')
         
-        # Use a longer timeout for Raspberry Pi but handle timeouts gracefully
         response = requests.post(
             f'{OLLAMA_HOST}/api/generate',
             json={
@@ -462,19 +461,31 @@ def test_ollama():
                 'prompt': prompt,
                 'stream': False,
                 'options': {
-                    'num_predict': 20,        # Short responses
-                    'num_thread': 2,          # Limit CPU usage
-                    'temperature': 0.1
+                    'num_predict': 100,
+                    'num_thread': 2,
+                    'temperature': 0.1,
+                    'top_p': 0.9,
+                    'stop': ['.', '!', '?', '\n']  # Stop at sentence endings
                 }
             },
-            timeout=45  # 45 second timeout
+            timeout=45
         )
         
         if response.status_code == 200:
             result = response.json()
+            # Check if response was cut off due to length
+            if result.get('done_reason') == 'length':
+                return jsonify({
+                    'success': False, 
+                    'error': 'Response was cut short. Try increasing num_predict or using a shorter prompt.',
+                    'partial_response': result.get('response', '')
+                })
             return jsonify({'success': True, 'response': result.get('response', 'No response')})
         else:
-            return jsonify({'success': False, 'error': f'Ollama error: {response.status_code}'})
+            return jsonify({
+                'success': False, 
+                'error': f'Ollama error: {response.status_code} - {response.text}'
+            })
             
     except requests.exceptions.Timeout:
         return jsonify({
@@ -488,7 +499,7 @@ def test_ollama():
         })
     except Exception as e:
         return jsonify({'success': False, 'error': str(e)})
-    
+        
 @app.route("/api/temperature")
 def api_temperature():
     """Get CPU temperature with multiple fallback methods"""
