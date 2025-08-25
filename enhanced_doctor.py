@@ -17,6 +17,8 @@ import numpy as np
 from collections import deque
 import statistics
 from ollama_client import summarize_text, analyze_system_trends
+import platform
+
 # Configuration
 CONFIG_FILE = Path("./config.yaml")
 LOG_DIR = Path("/var/log/ai_health")
@@ -26,7 +28,7 @@ DECISIONS_LOG = LOG_DIR / "decisions.log"
 KNOWLEDGE_DB = LOG_DIR / "knowledge.db"
 PATTERNS_FILE = LOG_DIR / "patterns.pkl"
 OLLAMA_HOST = os.getenv("OLLAMA_HOST", "http://127.0.0.1:11434")
-MODEL = os.getenv("OLLAMA_MODEL", "tinyllama")
+MODEL = os.getenv("OLLAMA_MODEL")
 
 # Setup logging
 logging.basicConfig(
@@ -964,48 +966,122 @@ class AutonomousDoctor:
         return self.health_data
 
     def get_cpu_temperature(self):
-        """Get CPU temperature with multiple fallback methods"""
+        """Get CPU temperature with platform-specific methods"""
+        system = platform.system().lower()
+        
         try:
-            # Method 1: vcgencmd (Raspberry Pi)
-            temp_output = self.run_command("vcgencmd measure_temp")
-            if temp_output and "temp" in temp_output:
-                temp_str = temp_output.split("=")[1].split("'")[0]
-                return float(temp_str)
-            
-            # Method 2: Thermal zone (Linux)
-            try:
-                with open("/sys/class/thermal/thermal_zone0/temp", "r") as f:
-                    temp_millic = float(f.read().strip())
-                    return temp_millic / 1000.0  # Convert to Celsius
-            except:
-                pass
+            if system == "darwin":  # macOS
+                return self._get_macos_temperature()
+            elif system == "linux":
+                return self._get_linux_temperature()
+            else:
+                logger.warning(f"Unsupported system for temperature reading: {system}")
+                return 0.0
                 
-            # Method 3: sensors command
-            sensors_output = self.run_command("sensors | grep -i temp | head -1")
-            if sensors_output:
+        except Exception as e:
+            logger.error(f"Error reading CPU temperature: {e}")
+            return 0.0
+
+    def _get_macos_temperature(self):
+        """Get CPU temperature on macOS"""
+        # Method 1: Use osx-cpu-temp if installed (brew install osx-cpu-temp)
+        try:
+            result = subprocess.run(["osx-cpu-temp"], 
+                                capture_output=True, text=True, timeout=5)
+            if result.returncode == 0:
+                # Output is usually like "52.4°C"
+                temp_str = result.stdout.strip().replace('°C', '')
+                return float(temp_str)
+        except (FileNotFoundError, subprocess.TimeoutExpired, ValueError):
+            pass
+        
+        # Method 2: Use iStats (gem install iStats)
+        try:
+            result = subprocess.run(["istats", "cpu", "temp"], 
+                                capture_output=True, text=True, timeout=5)
+            if result.returncode == 0:
+                # Output: "CPU temp: 52.4°C"
                 import re
-                match = re.search(r'([0-9]+\.[0-9]+)°C', sensors_output)
+                match = re.search(r'([0-9]+\.[0-9]+)', result.stdout)
                 if match:
                     return float(match.group(1))
-            
-            # Method 4: Check multiple thermal zones
-            for zone in range(5):
-                try:
-                    with open(f"/sys/class/thermal/thermal_zone{zone}/temp", "r") as f:
+        except (FileNotFoundError, subprocess.TimeoutExpired, ValueError):
+            pass
+        
+        # Method 3: Try sysctl (may not work on all Macs)
+        try:
+            result = subprocess.run(["sysctl", "machdep.xcpm.cpu_thermal_level"], 
+                                capture_output=True, text=True, timeout=5)
+            if result.returncode == 0:
+                # This gives a thermal level, not actual temperature
+                # but can be used as a proxy in some cases
+                level = int(result.stdout.split(':')[1].strip())
+                # Convert level to approximate temperature (very rough estimate)
+                base_temp = 30 + (level * 5)  # Adjust based on your system
+                return float(base_temp)
+        except:
+            pass
+        
+        logger.warning("Could not read CPU temperature on macOS - consider installing osx-cpu-temp or iStats")
+        return 0.0
+
+    def _get_linux_temperature(self):
+        """Get CPU temperature on Linux/Raspberry Pi"""
+        # Method 1: vcgencmd (Raspberry Pi)
+        try:
+            result = subprocess.run(["vcgencmd", "measure_temp"], 
+                                capture_output=True, text=True, timeout=5)
+            if result.returncode == 0 and "temp" in result.stdout:
+                temp_str = result.stdout.split("=")[1].split("'")[0]
+                return float(temp_str)
+        except (FileNotFoundError, subprocess.TimeoutExpired, ValueError):
+            pass
+        
+        # Method 2: Thermal zone (Linux)
+        for zone in range(5):
+            try:
+                zone_file = f"/sys/class/thermal/thermal_zone{zone}/temp"
+                if os.path.exists(zone_file):
+                    with open(zone_file, "r") as f:
                         temp_millic = float(f.read().strip())
                         temp_c = temp_millic / 1000.0
                         if temp_c > 10:  # Reasonable temperature check
                             return temp_c
-                except:
-                    continue
-                    
-            logger.warning("Could not read CPU temperature using any method")
-            return 0.0
-            
-        except Exception as e:
-            logger.error(f"Error reading CPU temperature: {e}")
-            return 0.0
+            except:
+                continue
         
+        # Method 3: sensors command
+        try:
+            result = subprocess.run(["sensors"], 
+                                capture_output=True, text=True, timeout=5)
+            if result.returncode == 0:
+                import re
+                # Look for CPU temperature patterns
+                matches = re.findall(r'Core\s+\d+:\s+\+([0-9]+\.[0-9]+)°C', result.stdout)
+                if matches:
+                    # Return the highest core temperature
+                    return max(float(match) for match in matches)
+        except (FileNotFoundError, subprocess.TimeoutExpired, ValueError):
+            pass
+        
+        # Method 4: acpi command
+        try:
+            result = subprocess.run(["acpi", "-t"], 
+                                capture_output=True, text=True, timeout=5)
+            if result.returncode == 0:
+                import re
+                match = re.search(r'([0-9]+\.[0-9]+) degrees C', result.stdout)
+                if match:
+                    return float(match.group(1))
+        except (FileNotFoundError, subprocess.TimeoutExpired, ValueError):
+            pass
+        
+        logger.warning("Could not read CPU temperature on Linux using any method")
+        return 0.0
+
+
+
+
     def store_long_term_metrics(self, previous_health):
         """Store metrics for long-term trend analysis"""
         if not self.health_data:

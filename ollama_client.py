@@ -8,7 +8,7 @@ import time
 from datetime import datetime, timedelta
 
 OLLAMA_HOST = os.getenv("OLLAMA_HOST", "http://127.0.0.1:11434")
-MODEL = os.getenv("OLLAMA_MODEL", "tinyllama")
+MODEL = os.getenv("OLLAMA_MODEL")
 KNOWLEDGE_DB = "/var/log/ai_health/knowledge.db"
 OLLAMA_TIMEOUT = int(os.getenv("OLLAMA_TIMEOUT", "120"))  # Default 120 seconds
 
@@ -291,6 +291,8 @@ def analyze_network_logs(log_content: str, max_chars=800):
                 "repeat_penalty": 1.1
             }
         }
+        url = "http://localhost:11434/api/generate"
+
         data = safe_ollama_request(url, payload, timeout=80)
         return data.get("response", "").strip()
         

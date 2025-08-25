@@ -1,7 +1,7 @@
 #!/home/pi/raspi-doctor/.venv/bin/python3
 # diagnose_cloudflared.py
 
-import subprocess  # ADD THIS IMPORT
+import subprocess
 import yaml
 from enhanced_doctor import ServiceTroubleshooter
 from enhanced_doctor import KnowledgeBase
@@ -11,6 +11,9 @@ def diagnose_cloudflared():
     troubleshooter = ServiceTroubleshooter(kb)
     
     print("=== Cloudflare Tunnel Diagnosis ===")
+    
+    # Define the config path (ADD THIS LINE)
+    config_path = "/etc/cloudflared/config.yml"  # Default cloudflared config path
     
     # Get service details
     service_name = "cloudflared.service"

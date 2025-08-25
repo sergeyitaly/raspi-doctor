@@ -1,2 +1,10 @@
 setup_pi_doctor.sh.backup
 .env
+ollama-linux-arm64.tgz
+ollama_temp
+go1.20.10.darwin-amd64.tar.gz
+Ollama-darwin.zip
+__pycache__
+.venv/
+Ollama-darwin-x64.zip
+ollama/

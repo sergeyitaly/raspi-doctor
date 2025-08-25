@@ -9,16 +9,19 @@ from datetime import datetime, timedelta
 from pathlib import Path
 import subprocess
 import requests
-
+import platform
 from ollama_client import summarize_text, analyze_network_logs, analyze_security_logs
 from enhanced_doctor import AutonomousDoctor, KnowledgeBase
+import logging
+
+logger = logging.getLogger("ollama_client")
 
 # Initialize Flask app
 app = Flask(__name__)
 
 LOG_FILE = Path("/var/log/ai_health/health.log")
 LOG_DIR = Path("/var/log/ai_health")
-MODEL = os.getenv("OLLAMA_MODEL", "tinyllama")
+MODEL = os.getenv("OLLAMA_MODEL")
 OLLAMA_HOST = os.getenv("OLLAMA_HOST", "http://127.0.0.1:11434")
 
 # Global doctor instance
@@ -455,7 +458,7 @@ def api_ollama_status():
         return jsonify({
             "status": "online",
             "message": "Ollama is running but busy processing requests",
-            "models": [{"name": "tinyllama"}, {"name": "phi3:mini"}]  # Provide default models
+            "models": [{"name": "phi3:mini"}]  # Provide default models
         })
     except Exception as e:
         return jsonify({
@@ -521,45 +524,83 @@ def test_ollama():
         
 @app.route("/api/temperature")
 def api_temperature():
-    """Get CPU temperature with multiple fallback methods"""
+    """Get CPU temperature with platform-specific methods"""
     try:
         if not doctor:
             return jsonify({"error": "Doctor not initialized"}), 500
         
-        # Try multiple methods to get temperature
+        system = platform.system().lower()
         temperature = doctor.get_cpu_temperature()
         
-        # If still 0, try direct system commands
-        if temperature == 0:
-            # Direct vcgencmd
-            try:
-                result = subprocess.run(["vcgencmd", "measure_temp"], 
-                                      capture_output=True, text=True, timeout=5)
-                if result.returncode == 0:
-                    temp_str = result.stdout.split("=")[1].split("'")[0]
-                    temperature = float(temp_str)
-            except:
-                pass
+        # Provide diagnostic information
+        diagnostic = {
+            "system": system,
+            "temperature": temperature,
+            "available_methods": []
+        }
+        
+        if system == "darwin":
+            # Check macOS-specific tools
+            diagnostic["available_methods"] = check_macos_tools()
+        elif system == "linux":
+            # Check Linux-specific tools
+            diagnostic["available_methods"] = check_linux_tools()
         
         if temperature == 0:
-            # Direct thermal zone reading
-            try:
-                with open("/sys/class/thermal/thermal_zone0/temp", "r") as f:
-                    temp_millic = float(f.read().strip())
-                    temperature = temp_millic / 1000.0
-            except:
-                pass
+            logger.warning(f"Temperature reading failed on {system}")
+            logger.info(f"Diagnostic info: {diagnostic}")
         
         return jsonify({
             "temperature": temperature,
             "unit": "celsius",
             "timestamp": datetime.now().isoformat(),
-            "source": "direct_measurement"
+            "system": system,
+            "diagnostic": diagnostic if temperature == 0 else None
         })
         
     except Exception as e:
+        logger.error(f"Critical error in temperature endpoint: {e}")
         return jsonify({"error": f"Failed to get temperature: {str(e)}"}), 500
+
+def check_macos_tools(self):
+    available = []
+    tools = ["osx-cpu-temp", "istats", "sysctl"]
     
+    for tool in tools:
+        try:
+            result = subprocess.run(["which", tool], 
+                                  capture_output=True, text=True, timeout=3)
+            if result.returncode == 0:
+                available.append(tool)
+        except:
+            continue
+    
+    return available
+
+def check_linux_tools(self):
+    available = []
+    tools = ["vcgencmd", "sensors", "acpi"]
+    
+    for tool in tools:
+        try:
+            result = subprocess.run(["which", tool], 
+                                  capture_output=True, text=True, timeout=3)
+            if result.returncode == 0:
+                available.append(tool)
+        except:
+            continue
+    
+    # Check thermal zones
+    thermal_zones = []
+    for zone in range(5):
+        if os.path.exists(f"/sys/class/thermal/thermal_zone{zone}"):
+            thermal_zones.append(zone)
+    
+    if thermal_zones:
+        available.append(f"thermal_zones({thermal_zones})")
+    
+    return available
+
 @app.route("/api/debug/temperature")
 def api_debug_temperature():
     """Debug endpoint to test all temperature reading methods"""

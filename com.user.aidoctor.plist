@@ -1,0 +1,32 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+    <key>Label</key>
+    <string>com.user.aidoctor</string>
+    <key>ProgramArguments</key>
+    <array>
+        <string>/Users/$(whoami)/raspi_doctor/.venv/bin/python</string>
+        <string>/Users/$(whoami)/raspi_doctor/app.py</string>
+    </array>
+    <key>WorkingDirectory</key>
+    <string>/Users/$(whoami)/raspi_doctor</string>
+    <key>EnvironmentVariables</key>
+    <dict>
+        <key>PYTHONPATH</key>
+        <string>/Users/$(whoami)/raspi_doctor</string>
+        <key>OLLAMA_HOST</key>
+        <string>http://localhost:11434</string>
+        <key>PORT</key>
+        <string>8010</string>
+    </dict>
+    <key>RunAtLoad</key>
+    <true/>
+    <key>KeepAlive</key>
+    <true/>
+    <key>StandardOutPath</key>
+    <string>/var/log/aidoctor.log</string>
+    <key>StandardErrorPath</key>
+    <string>/var/log/aidoctor.error.log</string>
+</dict>
+</plist>
